@@ -1,0 +1,8 @@
+{
+  "name": "Remix ROAS Pulse - لوحة تحليلات الحملات الإعلانية والعائد على الإنفاق",
+  "description": "لوحة تحكم ذكية بالذكاء الاصطناعي لتحليل أداء الحملات الإعلانية على سناب شات، تيك توك، ميتا وجوجل من ملفات CSV مع قياس العائد (ROAS) وثمن البيعة (CPA) والانتشار",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
