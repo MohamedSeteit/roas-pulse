@@ -59,6 +59,6 @@
 
 ## 👨‍💻 المطوّر (Author)
 
-تم التصميم والتطوير بواسطة **Mohamed Seteit** — Digital Marketing Manager & Martech Builder.
+تم التصميم والتطوير بواسطة **Mohamed Seteit** — Performance Marketing Manager.
 - 🌐 **Live App:** [https://roas-pulse.vercel.app/](https://roas-pulse.vercel.app/)
 - 🐙 **GitHub:** [@MohamedSeteit](https://github.com/MohamedSeteit)
