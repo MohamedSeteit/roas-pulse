@@ -1,115 +1,64 @@
-[roas_pulse_readme.md](https://github.com/user-attachments/files/34942456/roas_pulse_readme.md)
-# ROAS Pulse 🚀
+# 📊 ROAS Pulse — لوحة تحليلات العائد وثمن البيعة بالذكاء الاصطناعي
 
-**ROAS Pulse** is an all-in-one, white-label B2B SaaS reporting and analytics workspace built by **Mohamed Seteit** for digital marketers, media buyers, and marketing agencies. It unifies multi-channel ad performance, tracks Month-over-Month (MoM) growth, and leverages cumulative AI analysis to deliver actionable campaign insights.
+**ROAS Pulse** هي منصة سحابية (SaaS) متكاملة لتحليل أداء الحملات الإعلانية وتوحيد التقارير المالية للمسوقين، وكالات التسويق، وأصحاب المتاجر الإلكترونية، تم تطويرها بواسطة **[Mohamed Seteit](https://github.com/MohamedSeteit)**.
 
-🌐 **Live App:** [https://roas-pulse.vercel.app/](https://roas-pulse.vercel.app/)
+🔗 **رابط التطبيق المباشر:** [roas-pulse.vercel.app](https://roas-pulse.vercel.app/)
 
-## ✨ Key Features
+---
 
-### 1. Client MoM Workspace (Multi-Client & Historical Tracking)
+## 🎯 لمن صُممت هذه الأداة؟ (مثالية لأصحاب المتاجر الإلكترونية)
 
-* **Dedicated Client Profiles:** Create, switch, and manage isolated workspaces for each client.
+تساعد أداة **ROAS Pulse** التجار والمسوقين العاملين على منصات التجارة الإلكترونية في العالم العربي والعالم — بما في ذلك **سلة (Salla)**، **زد (Zid)**، **شوبيفاي (Shopify)**، **إيزي أوردرز (EasyOrders)**، و**ووكومرس (WooCommerce)** — على ربط إنفاقهم الإعلاني بالمبيعات الفعلية وحساب تكلفة الاستحواذ (CPA) والعائد على الإنفاق (ROAS) بدقة متناهية عبر جميع المنصات الإعلانية في مكان واحد:
 
-* **Monthly Snapshots (`YYYY-MM`):** Save and retrieve historical monthly performance records with instant **Month-over-Month (MoM) Deltas** for Spend, Revenue, ROAS, and CPA.
+- **Snapchat Ads (سناب شات)**
+- **TikTok Ads (تيك توك)**
+- **Meta Ads — Facebook & Instagram (ميتا)**
+- **Google Ads (إعلانات جوجل)**
 
-* **White-Label Customization:** Customize report titles, agency/brand headers, target KPIs (Target CPA & Target ROAS), currencies, executive notes, and toggle dashboard/PDF sections.
+---
 
-* **Cumulative AI Campaign Analysis (`/api/ai-analyze`):** Passes client profiles, historical monthly records, and past learnings to Google Gemini AI to generate historical comparisons, identify recurring patterns, and recommend next-month targets.
+## 📸 جولة داخل المنصة (Screenshots)
 
-### 2. Print-Ready PDF Reports (`PrintReportModal`)
+### 1. المؤشرات الاستراتيجية الرئيسية (Executive KPIs)
+متابعة فورية للمصروف الإعلاني، إجمالي المبيعات، صافي الربح التقريبي، العائد على الإنفاق (ROAS)، ثمن البيعة (CPA)، متوسط السلة (AOV)، ونسبة التحويل.
+![Executive KPIs](1%20ROAS%20Pulse%20Dashboard.png)
 
-* **High-Resolution Inline SVG Charts:** Built with `print-color-adjust: exact` for crisp, reliable PDF exports.
+### 2. تحليلات الأداء البصري والمسار الزمني (Performance Analytics)
+مقارنة يومية أو حسب الحملة بين المصروف الإعلاني والمبيعات لاكتشاف أيام الذروة وتقلبات الأداء.
+![Performance Analytics](2%20ROAS%20Pulse%20Dashboard.png)
 
-* **Focused Financial Visuals:**
+### 3. التفصيل اليومي واكتشاف إجهاد الإعلانات (Day-by-Day & Ad Fatigue)
+مراقبة استقرار الإعلانات يوم بيوم واكتشاف الإعلانات التي تعاني من الإجهاد أو ارتفاع التكلفة مبكراً.
+![Ad Breakdown](3%20ROAS%20Pulse%20Dashboard.png)
 
-  * **Spend vs. Revenue Chart**
+### 4. جدول تقييم كفاءة الحملات (Campaigns Drilldown)
+تصنيف تلقائي للحملات بين (**أداء استثنائي Scale Up**، **أداء قوي وناجح**، أو **مهدور / أوقف الحملة**) لتسهيل قرارات توزيع الميزانية.
+![Campaigns Drilldown](4%20ROAS%20Pulse%20Dashboard.png)
 
-  * **ROAS vs. Target ROAS Benchmark Chart**
+### 5. مستشار الذكاء الاصطناعي التراكمي (AI Campaign Intelligence)
+تحليل عميق للبيانات التاريخية للعميل شهر بعد شهر، مع تقديم تعليق تنفيذي، تحليل الهدر، وخطة إعادة توزيع الميزانية.
+![AI Intelligence](5%20ROAS%20Pulse%20Dashboard.png)
 
-* **Flexible Grouping:** Toggle chart views seamlessly between **Platform-by-Platform** and **Month-over-Month (MoM)**.
+---
 
-### 3. Authentication & Subscription Management (`AuthSubscriptionModal`)
+## ✨ أبرز المميزات التقنية
 
-* **Email & Password Auth:** Powered by Firebase Authentication with encrypted session management.
+- **مساحة عمل العملاء والمتابعة الشهرية (Client MoM Workspace):** إدارة ملفات متعددة للعملاء أو المتاجر وحفظ لقطات الأداء الشهرية مع مقارنة تلقائية بالأشهر السابقة.
+- **التكامل والربط الآلي (Integrations):** مزامنة مباشرة مع **Google Sheets**، رفع ملفات **CSV** بقوالب جاهزة، واستقبال البيانات آلياً عبر **Webhooks** (متوافق مع Zapier و Make و n8n).
+- **تقارير PDF احترافية قابلة للتخصيص (White-Label):** تصدير تقارير جاهزة للطباعة برسوم بيانية عالية الدقة وهوية مخصصة للوكالة أو المتجر.
+- **دعم العملات العربية والعالمية:** دعم كامل للريال السعودي (SAR)، الجنيه المصري (EGP)، الدرهم الإماراتي (AED)، والدولار الأمريكي (USD) بواجهة عربية سهلة وسريعة.
 
-* **30-Day Free Trial:** Automatic 30-day trial activation upon signup with a live countdown badge in the header.
+---
 
-* **Pro Subscription (\$2.95/month):** Seamless upgrade flow integrated with **Creem** (`creem.io`) and automated webhook status synchronization.
+## 💳 خطة الاشتراك
 
-### 4. Automated Integrations (`IntegrationsModal`)
+- **تجربة مجانية لمدة 30 يوماً** عند التسجيل بالبريد الإلكتروني.
+- بعد انتهاء الفترة التجريبية: اشتراك شهري رمزي بقيمة **$2.95 / شهرياً** فقط مع إمكانية الإلغاء في أي وقت.
 
-* **Google Sheets & CSV Sync:** Automatically converts Google Sheets links to CSV format and imports campaign rows with built-in SSRF protection.
+---
 
-* **Custom Client Webhooks:** Unique JSON webhook endpoints per client to ingest real-time data from **Zapier**, **Make**, or **n8n**, complete with a one-click test trigger.
+## 👨‍💻 المطوّر (Author)
 
-* **Ad Platform Templates:** Ready-to-use export templates and formatting guides for **Meta**, **Google Ads**, **TikTok**, and **Snapchat**.
-
-## 🛠️ Tech Stack
-
-* **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, Lucide Icons, Motion
-
-* **Backend:** Node.js, Express (`server.ts`), `express-rate-limit`
-
-* **Database & Auth:** Firebase Admin SDK, Cloud Firestore, Firebase Authentication
-
-* **AI Engine:** Google Gemini (`@google/genai`)
-
-* **Payments:** Creem (`creem.io`) Checkout & Webhooks
-
-* **Hosting:** Vercel (Serverless Functions + Static Edge CDN)
-
-## ⚙️ Environment Variables
-
-To run this project locally or deploy it to Vercel, configure the following environment variables:
-
-```env
-# Firebase Configuration
-FIREBASE_SERVICE_ACCOUNT={"type":"service_account",...}
-FIREBASE_PROJECT_ID=roas-pulse
-FIREBASE_CLIENT_EMAIL=your-service-account-email
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-FIREBASE_WEB_API_KEY=your-firebase-web-api-key
-
-# Security & Sessions
-SESSION_SECRET=your-strong-random-session-secret
-
-# AI Analysis
-GEMINI_API_KEY=your-google-gemini-api-key
-
-# Payments (Creem)
-CREEM_PAYMENT_URL=https://www.creem.io/payment/your-product-id
-CREEM_WEBHOOK_SECRET=your-creem-webhook-secret
-```
-
-## 🚀 Local Development Setup
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/MohamedSeteit/ROAS-PULSE.git
-   cd ROAS-PULSE
-   ```
-
-2. **Install dependencies:**
-
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables:**
-   Create a `.env` file in the root directory and add the keys listed above.
-
-4. **Run the development server:**
-
-   ```bash
-   npm run dev
-   ```
-
-   The app will be available at `http://localhost:3000` (or the port configured in `server.ts`).
-
-## 👨‍💻 Author & License
-
-Designed & Developed by **Mohamed Seteit** ([GitHub](https://github.com/MohamedSeteit))
-
-© 2026 **ROAS Pulse**. All rights reserved.
+تم التصميم والتطوير بواسطة **Mohamed Seteit** — Digital Marketing Manager & Martech Builder.
+- 🌐 **Live App:** [https://roas-pulse.vercel.app/](https://roas-pulse.vercel.app/)
+- 🐙 **GitHub:** [@MohamedSeteit](https://github.com/MohamedSeteit)
