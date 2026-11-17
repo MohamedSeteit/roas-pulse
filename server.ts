@@ -1150,8 +1150,8 @@ app.post(
 });
 
 // Vite middleware in dev or static files in prod
-async function startServer() {
-  if (!isProd) {
+if (!isProd && !process.env.VERCEL) {
+  (async () => {
     const disableHmr = process.env.DISABLE_HMR === 'true';
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -1164,24 +1164,20 @@ async function startServer() {
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
-    app.get('*', (_req: Request, res: Response) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-    });
-  }
 
-  const httpServer = app.listen(PORT, HOST, () => {
-    console.log(`Server is running on http://${HOST}:${PORT}`);
+    app.listen(PORT, HOST, () => {
+      console.log(`Server is running on http://${HOST}:${PORT}`);
+    });
+  })();
+} else if (!process.env.VERCEL) {
+  app.use(express.static(path.join(__dirname, 'dist')));
+  app.get('*', (_req: Request, res: Response) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
   });
 
-  httpServer.on('error', (err) => {
-    console.error('HTTP server failed to listen:', err);
-    process.exit(1);
+  app.listen(PORT, HOST, () => {
+    console.log(`Server is running on http://${HOST}:${PORT}`);
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+export default app;
