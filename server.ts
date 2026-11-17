@@ -677,7 +677,7 @@ ${samplePreview}
 4. فقط إذا كانت البيانات غير جدولية (isTabular = false)، استخرج الصفوف مباشرة في extractedRows.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: 'gemini-2.5-flash',
       contents: extractionPrompt,
       config: {
         maxOutputTokens: 1200,
@@ -941,7 +941,7 @@ app.post(
 قدم التقرير باللغة العربية الفصحى والمهنية وبشكل موجز ومركّز مع ذكر الأرقام وأسماء الإعلانات والأشهر الفعلية بدقة.`;
 
     const aiPromise = ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: 'gemini-2.5-flash',
       contents: `حلل بيانات الحملات الموجزة التالية (محددة الحجم لضمان السرعة والكفاءة) واستخرج تقريراً استراتيجياً متكاملاً:\n${promptBudget.serializedJson}`,
       config: {
         systemInstruction,
@@ -1094,7 +1094,7 @@ app.post(
 
     const parsedJson = JSON.parse(resultText);
     parsedJson.generatedAt = new Date().toLocaleString('ar-SA');
-    parsedJson.aiModelLabel = 'Gemini 4 Hydrogen';
+    parsedJson.aiModelLabel = 'Gemini 2.5 Flash';
     parsedJson.tokenBudget = {
       promptChars: promptBudget.promptChars,
       estimatedInputTokens: promptBudget.estimatedInputTokens,
