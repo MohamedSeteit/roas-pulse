@@ -15,6 +15,9 @@ import {
   Lock,
   Sun,
   Moon,
+  Layers,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import type {
   ClientProfile,
@@ -29,6 +32,8 @@ interface ClientWorkspaceBarProps {
   clients: ClientProfile[];
   activeClient: ClientProfile | null;
   activeMonthKey: string;
+  selectedMonthKeys: string[];
+  isAggregatedView: boolean;
   currency: string;
   hasUnsavedChanges: boolean;
   isSavingMonth: boolean;
@@ -46,6 +51,8 @@ interface ClientWorkspaceBarProps {
   }) => Promise<void>;
   onDeleteClient: (clientId: string) => Promise<void>;
   onSelectMonth: (monthKey: string) => void;
+  onSelectAllMonths: () => void;
+  onToggleMonthInGroup: (monthKey: string) => void;
   onSaveMonth: () => Promise<void>;
   onOpenCustomizer: () => void;
   onOpenIntegrations: () => void;
@@ -57,6 +64,8 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
   clients,
   activeClient,
   activeMonthKey,
+  selectedMonthKeys,
+  isAggregatedView,
   currency,
   hasUnsavedChanges,
   isSavingMonth,
@@ -68,6 +77,8 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
   onCreateClient,
   onDeleteClient,
   onSelectMonth,
+  onSelectAllMonths,
+  onToggleMonthInGroup,
   onSaveMonth,
   onOpenCustomizer,
   onOpenIntegrations,
@@ -75,6 +86,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
 }) => {
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [showNewMonthInput, setShowNewMonthInput] = useState(false);
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [newMonthKey, setNewMonthKey] = useState('2026-12');
   const [newName, setNewName] = useState('');
   const [newIndustry, setNewIndustry] = useState('تجارة إلكترونية');
@@ -86,7 +98,9 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
   const storedMonthKeys = activeClient
     ? Object.keys(activeClient.months || {}).sort()
     : [];
-  const allMonthKeys = Array.from(new Set([...storedMonthKeys, activeMonthKey])).sort();
+  const allMonthKeys = Array.from(
+    new Set([...storedMonthKeys, ...(isAggregatedView ? [] : [activeMonthKey])])
+  ).sort();
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +159,10 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               <select
                 aria-label="اختر العميل"
                 value={activeClient.id}
-                onChange={(e) => onSelectClient(e.target.value)}
+                onChange={(e) => {
+                  setIsMultiSelectMode(false);
+                  onSelectClient(e.target.value);
+                }}
                 className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
               >
                 {clients.map((c) => (
@@ -234,29 +251,39 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
           </button>
 
           {isAuthenticated ? (
-            <button
-              type="button"
-              onClick={onSaveMonth}
-              disabled={isSavingMonth}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                hasUnsavedChanges
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
-              }`}
-            >
-              {hasUnsavedChanges ? (
-                <Save className="w-3.5 h-3.5" />
-              ) : (
-                <Check className="w-3.5 h-3.5" />
-              )}
-              <span>
-                {isSavingMonth
-                  ? 'جاري الحفظ...'
-                  : hasUnsavedChanges
-                  ? `حفظ بيانات ${formatMonthLabelAr(activeMonthKey)}`
-                  : `محفوظ (${formatMonthLabelAr(activeMonthKey)})`}
+            isAggregatedView ? (
+              <span
+                title="وضع تجميع الشهور يعرض البيانات المدمجة للقراءة والتحليل وتصدير التقارير دون تعديل الشهور المحفوظة"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>عرض مجمّع ({selectedMonthKeys.length} شهور)</span>
               </span>
-            </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onSaveMonth}
+                disabled={isSavingMonth}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  hasUnsavedChanges
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-500/30'
+                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                }`}
+              >
+                {hasUnsavedChanges ? (
+                  <Save className="w-3.5 h-3.5" />
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isSavingMonth
+                    ? 'جاري الحفظ...'
+                    : hasUnsavedChanges
+                    ? `حفظ بيانات ${formatMonthLabelAr(activeMonthKey)}`
+                    : `محفوظ (${formatMonthLabelAr(activeMonthKey)})`}
+                </span>
+              </button>
+            )
           ) : (
             <button
               type="button"
@@ -358,22 +385,60 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                 <CalendarRange className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 متابعة الشهور:
               </span>
+
+              {/* All Stored Months Aggregated Button */}
+              {storedMonthKeys.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMultiSelectMode(false);
+                    onSelectAllMonths();
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    isAggregatedView && selectedMonthKeys.length === storedMonthKeys.length
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30'
+                  }`}
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>كل الشهور ({storedMonthKeys.length})</span>
+                </button>
+              )}
+
               {allMonthKeys.map((mk) => {
-                const isSelected = mk === activeMonthKey;
+                const isSelected = isAggregatedView
+                  ? selectedMonthKeys.includes(mk)
+                  : mk === activeMonthKey;
                 const isStored = Boolean(activeClient.months?.[mk]);
                 return (
                   <button
                     key={mk}
                     type="button"
-                    onClick={() => onSelectMonth(mk)}
+                    onClick={() => {
+                      if (isMultiSelectMode && isStored) {
+                        onToggleMonthInGroup(mk);
+                      } else {
+                        setIsMultiSelectMode(false);
+                        onSelectMonth(mk);
+                      }
+                    }}
                     className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                       isSelected
-                        ? 'bg-emerald-600 text-white shadow-sm'
+                        ? isAggregatedView
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'bg-emerald-600 text-white shadow-sm'
                         : 'bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60'
                     }`}
                   >
+                    {isMultiSelectMode && isStored && (
+                      isSelected ? (
+                        <CheckSquare className="w-3 h-3 text-white" />
+                      ) : (
+                        <Square className="w-3 h-3 text-slate-400" />
+                      )
+                    )}
                     <span>{formatMonthLabelAr(mk)}</span>
-                    {isStored && (
+                    {!isMultiSelectMode && isStored && (
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-500 dark:bg-emerald-300'}`}
                         title="شهر محفوظ"
@@ -382,6 +447,22 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                   </button>
                 );
               })}
+
+              {/* Multi-Month Custom Grouping Toggle */}
+              {storedMonthKeys.length >= 2 && (
+                <button
+                  type="button"
+                  onClick={() => setIsMultiSelectMode((prev) => !prev)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                    isMultiSelectMode
+                      ? 'bg-amber-500 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30'
+                  }`}
+                >
+                  <CheckSquare className="w-3 h-3" />
+                  <span>{isMultiSelectMode ? 'إنهاء التحديد' : 'تجميع شهور محددة'}</span>
+                </button>
+              )}
 
               {showNewMonthInput ? (
                 <div className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-0.5">
@@ -396,6 +477,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                     type="button"
                     onClick={() => {
                       if (/^\d{4}-\d{2}$/.test(newMonthKey)) {
+                        setIsMultiSelectMode(false);
                         onSelectMonth(newMonthKey);
                         setShowNewMonthInput(false);
                       }
@@ -415,7 +497,10 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowNewMonthInput(true)}
+                  onClick={() => {
+                    setIsMultiSelectMode(false);
+                    setShowNewMonthInput(true);
+                  }}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-dashed border-slate-300 dark:border-slate-600 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
@@ -435,8 +520,8 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
             </div>
           </div>
 
-          {/* Month-over-Month Comparison Strip */}
-          {momComparison && (
+          {/* Month-over-Month Comparison Strip (Shown in single-month mode) */}
+          {!isAggregatedView && momComparison && (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/90 p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <div>
