@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Printer, Award, BarChart3 } from 'lucide-react';
+import { X, Printer, Award, BarChart3, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import type {
   AggregatedMetrics,
   PlatformMetrics,
@@ -50,7 +50,7 @@ const SpendSalesSvgChart: React.FC<{ rows: PdfChartRow[]; currency: string }> = 
   const barW = Math.min(26, Math.max(12, groupW * 0.28));
 
   return (
-    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
+    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2 print-section">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-slate-900">
           مخطط المصروف مقابل المبيعات ({currency})
@@ -185,7 +185,7 @@ const RoasSvgChart: React.FC<{ rows: PdfChartRow[]; targetRoas: number }> = ({
   const targetY = padTop + chartH - (targetRoas / maxRoas) * chartH;
 
   return (
-    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2">
+    <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2 print-section">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-slate-900">
           مخطط العائد على الإنفاق (ROAS)
@@ -302,6 +302,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   monthlySeries = [],
 }) => {
   const [chartScope, setChartScope] = useState<'platforms' | 'months'>('platforms');
+  const [pageOrientation, setPageOrientation] = useState<'landscape' | 'portrait'>('landscape');
 
   if (!isOpen) return null;
 
@@ -342,15 +343,58 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="معاينة التقرير التنفيذي للطباعة و PDF"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200 print-modal-backdrop"
     >
-      <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl max-h-[92vh] overflow-y-auto p-8 shadow-2xl space-y-6 print:m-0 print:p-0 print:shadow-none print:w-full print:max-h-none">
+      {/* Dynamic A4 Print Page Size & Margins */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 ${pageOrientation};
+            margin: 12mm;
+          }
+        }
+      `}</style>
+
+      <div
+        className={`bg-white text-slate-900 rounded-2xl w-full ${
+          pageOrientation === 'landscape' ? 'max-w-5xl' : 'max-w-3xl'
+        } max-h-[92vh] overflow-y-auto p-6 sm:p-8 shadow-2xl space-y-6 transition-all print-modal-container`}
+      >
         {/* Modal Top Actions (Hidden in print) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-4 no-print">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 no-print">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              معاينة التقرير التنفيذي للطباعة / PDF
+              معاينة التقرير التنفيذي (A4)
             </span>
+
+            {/* A4 Orientation Switcher */}
+            <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px] border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setPageOrientation('landscape')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold cursor-pointer transition-all ${
+                  pageOrientation === 'landscape'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <RectangleHorizontal className="w-3.5 h-3.5" />
+                <span>A4 عرضي (Landscape)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPageOrientation('portrait')}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md font-bold cursor-pointer transition-all ${
+                  pageOrientation === 'portrait'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <RectangleVertical className="w-3.5 h-3.5" />
+                <span>A4 طولي (Portrait)</span>
+              </button>
+            </div>
+
             {monthlySeries.length >= 2 && (
               <div className="inline-flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px]">
                 <button
@@ -396,9 +440,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
         </div>
 
         {/* Printable Document Body */}
-        <div className="space-y-6 font-sans">
+        <div className="space-y-5 font-sans">
           {/* Document Header */}
-          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-5">
+          <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4 print-section">
             <div>
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0">
@@ -436,9 +480,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* Core KPIs */}
           {reportSettings.visibleSections.kpis && (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="space-y-3 print-section">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-xs text-slate-500 block">إجمالي المصروف</span>
                   <p className="text-xl font-black text-slate-900 mt-1">
                     {metrics.totalSpend.toLocaleString()} {currency}
@@ -446,7 +490,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   <span className="text-[11px] text-slate-400">ميزانية الحملات</span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-xs text-slate-500 block">إجمالي المبيعات</span>
                   <p className="text-xl font-black text-emerald-700 mt-1">
                     {metrics.totalRevenue.toLocaleString()} {currency}
@@ -456,7 +500,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200">
                   <span className="text-xs text-indigo-700 font-semibold block">
                     العائد على الإنفاق (ROAS)
                   </span>
@@ -466,7 +510,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-xs text-slate-500 block">ثمن البيعة (CPA)</span>
                   <p className="text-xl font-black text-slate-900 mt-1">
                     {metrics.cpa} {currency}
@@ -477,7 +521,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div>
                   <span className="text-slate-500 font-medium">الانتشار والوصول الإجمالي:</span>
                   <strong className="text-slate-900 mr-2 text-sm">
@@ -501,73 +545,33 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </span>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
-          {/* PDF CHARTS SECTION: STRICTLY ONLY SPEND, SALES, AND ROAS */}
+          {/* PDF CHARTS SECTION */}
           {reportSettings.visibleSections.pdfCharts && activeChartRows.length > 0 && (
-            <div className="space-y-3 break-inside-avoid">
+            <div className="space-y-3 print-section">
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-700" />
                 <h3 className="font-bold text-sm text-slate-900">
-                  الرسوم البيانية للأداء المالي (المصروف • المبيعات • العائد فقط)
+                  الرسوم البيانية للأداء المالي (المصروف • المبيعات • العائد)
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                className={`grid ${
+                  pageOrientation === 'landscape' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'
+                } gap-4`}
+              >
                 <SpendSalesSvgChart rows={activeChartRows} currency={currency} />
                 <RoasSvgChart rows={activeChartRows} targetRoas={reportSettings.targetRoas} />
               </div>
             </div>
           )}
 
-          {/* Executive Note & AI Executive Commentary */}
-          {reportSettings.visibleSections.aiInsights && (
-            <div className="p-5 rounded-xl border border-indigo-200 bg-indigo-50/50 space-y-3">
-              <div className="flex items-center gap-2">
-                <Award className="w-5 h-5 text-indigo-700" />
-                <h3 className="font-bold text-sm text-indigo-950">
-                  التعليق التنفيذي لتحسين الأداء (Executive Performance Commentary)
-                </h3>
-              </div>
-
-              {reportSettings.executiveNote && (
-                <div className="p-3 rounded-lg bg-white border border-indigo-200 text-xs text-slate-800">
-                  <strong className="text-indigo-900 block mb-0.5">ملاحظة مدير الحساب للعميل:</strong>
-                  <p>{reportSettings.executiveNote}</p>
-                </div>
-              )}
-
-              <p className="text-xs text-slate-800 leading-relaxed">
-                {analysis?.executiveSummary ||
-                  `حققت الحملات خلال الفترة مبيعات إجمالية بقيمة ${metrics.totalRevenue.toLocaleString()} ${currency} بمصروف قدره ${metrics.totalSpend.toLocaleString()} ${currency}، مما نتج عنه عائد إجمالي على الإنفاق قدره ${metrics.roas}x وتكلفة بيعة بلغت ${metrics.cpa} ${currency}. يوصى بتركيز الميزانيات على المنصات الأكثر كفاءة وخفض الصرف على الحملات المتعثرة.`}
-              </p>
-
-              {analysis?.historicalComparison?.trendVsPreviousMonths && (
-                <p className="text-xs text-indigo-900/90 leading-relaxed pt-1 border-t border-indigo-200/50">
-                  <strong>المقارنة التاريخية (شهر بعد شهر): </strong>
-                  {analysis.historicalComparison.trendVsPreviousMonths}
-                </p>
-              )}
-
-              {analysis?.actionableRecommendations && (
-                <div className="pt-2 border-t border-indigo-200/60">
-                  <span className="text-[11px] font-bold text-indigo-900 block mb-1">
-                    أهم الإجراءات العملية الفورية للتحسين:
-                  </span>
-                  <ul className="text-xs text-slate-700 space-y-1 list-disc pr-4">
-                    {analysis.actionableRecommendations.slice(0, 4).map((rec, i) => (
-                      <li key={i}>{rec}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Platform Performance Table */}
           {reportSettings.visibleSections.platforms && (
-            <div className="space-y-2">
+            <div className="space-y-2 print-section">
               <h3 className="font-bold text-sm text-slate-900">
                 جدول مقارنة المنصات الإعلانية (سناب شات • تيك توك • ميتا • جوجل)
               </h3>
@@ -613,7 +617,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           )}
 
           {/* Top 3 Winning and Bottom Campaigns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs print-section">
             <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40">
               <h4 className="font-bold text-emerald-900 mb-2">أعلى 3 حملات في العائد (ROAS):</h4>
               <div className="space-y-1.5">
@@ -650,8 +654,52 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </div>
           </div>
 
+          {/* Executive Note & AI Executive Commentary */}
+          {reportSettings.visibleSections.aiInsights && (
+            <div className="p-5 rounded-xl border border-indigo-200 bg-indigo-50/50 space-y-3 print-section">
+              <div className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-indigo-700" />
+                <h3 className="font-bold text-sm text-indigo-950">
+                  التعليق التنفيذي لتحسين الأداء (Executive Performance Commentary)
+                </h3>
+              </div>
+
+              {reportSettings.executiveNote && (
+                <div className="p-3 rounded-lg bg-white border border-indigo-200 text-xs text-slate-800">
+                  <strong className="text-indigo-900 block mb-0.5">ملاحظة مدير الحساب للعميل:</strong>
+                  <p>{reportSettings.executiveNote}</p>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-800 leading-relaxed">
+                {analysis?.executiveSummary ||
+                  `حققت الحملات خلال الفترة مبيعات إجمالية بقيمة ${metrics.totalRevenue.toLocaleString()} ${currency} بمصروف قدره ${metrics.totalSpend.toLocaleString()} ${currency}، مما نتج عنه عائد إجمالي على الإنفاق قدره ${metrics.roas}x وتكلفة بيعة بلغت ${metrics.cpa} ${currency}. يوصى بتركيز الميزانيات على المنصات الأكثر كفاءة وخفض الصرف على الحملات المتعثرة.`}
+              </p>
+
+              {analysis?.historicalComparison?.trendVsPreviousMonths && (
+                <p className="text-xs text-indigo-900/90 leading-relaxed pt-1 border-t border-indigo-200/50">
+                  <strong>المقارنة التاريخية (شهر بعد شهر): </strong>
+                  {analysis.historicalComparison.trendVsPreviousMonths}
+                </p>
+              )}
+
+              {analysis?.actionableRecommendations && (
+                <div className="pt-2 border-t border-indigo-200/60">
+                  <span className="text-[11px] font-bold text-indigo-900 block mb-1">
+                    أهم الإجراءات العملية الفورية للتحسين:
+                  </span>
+                  <ul className="text-xs text-slate-700 space-y-1 list-disc pr-4">
+                    {analysis.actionableRecommendations.slice(0, 4).map((rec, i) => (
+                      <li key={i}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Footer */}
-          <div className="pt-4 border-t border-slate-200 text-center text-[10px] text-slate-400">
+          <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 print-section">
             تم استخراج هذا التقرير آلياً بواسطة نظام {reportSettings.brandName || 'ROAS Pulse'} لتحليل الحملات الإعلانية.
           </div>
         </div>
