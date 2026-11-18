@@ -36,9 +36,15 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  html,
   body {
     background: white !important;
-    color: black !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
   .no-print {
     display: none !important;
@@ -46,5 +52,32 @@
   .print-only {
     display: block !important;
   }
+  .print-modal-backdrop {
+    position: static !important;
+    inset: auto !important;
+    background: white !important;
+    padding: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  .print-modal-container {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-section {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  .print-page-break {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
 }
-
