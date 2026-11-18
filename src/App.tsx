@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Upload, Link2, Sparkles } from 'lucide-react';
 import { Header } from './components/Header';
 import { ClientWorkspaceBar } from './components/ClientWorkspaceBar';
 import { ExecutiveSummary } from './components/ExecutiveSummary';
@@ -60,6 +61,24 @@ function resolveLegalRoute(pathname: string): LegalPageRoute | null {
     return 'terms-refund';
   }
   return null;
+}
+
+/** Group campaigns automatically by YYYY-MM based on their startDate/date */
+function groupCampaignsByMonthKey(
+  rows: CampaignData[],
+  fallbackMonthKey: string
+): Record<string, CampaignData[]> {
+  const groups: Record<string, CampaignData[]> = {};
+  for (const row of rows) {
+    const rawDate = row.startDate || row.endDate || row.date || '';
+    const match = rawDate.match(/^(\d{4}-\d{2})/);
+    const key = match ? match[1] : fallbackMonthKey;
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(row);
+  }
+  return groups;
 }
 
 export default function App() {
@@ -152,7 +171,6 @@ export default function App() {
   const themeMode: ThemeMode = reportSettings.themeMode === 'light' ? 'light' : 'dark';
   const targetCpa = reportSettings.targetCpa || 60;
 
-  // Apply Tailwind v4 dark class to <html> cleanly whenever active client or guest theme changes
   useEffect(() => {
     document.documentElement.classList.toggle('dark', themeMode === 'dark');
     try {
@@ -169,6 +187,15 @@ export default function App() {
     } else {
       setDateRange({ start: '', end: '' });
     }
+  }, []);
+
+  const resetToCleanWorkspace = useCallback(() => {
+    setCampaigns([]);
+    setAiAnalysis(null);
+    setDateRange({ start: '', end: '' });
+    setSelectedPlatform('all');
+    setHasUnsavedChanges(false);
+    setActiveMonthKey(getCurrentMonthKey());
   }, []);
 
   const applyClientAndMonth = useCallback(
@@ -206,7 +233,7 @@ export default function App() {
     [syncDatesFromCampaigns]
   );
 
-  // Boot: restore authenticated session or load initial demo dataset
+  // Boot: restore authenticated session (clean workspace) or load demo dataset for guests
   useEffect(() => {
     let mounted = true;
     async function init() {
@@ -223,8 +250,10 @@ export default function App() {
             setClients(loadedClients);
             if (loadedClients.length > 0) {
               applyClientAndMonth(loadedClients[0]);
-              return;
+            } else {
+              resetToCleanWorkspace();
             }
+            return;
           } else if (res.status === 401 && mounted) {
             localStorage.removeItem(TOKEN_STORAGE_KEY);
             setAuthToken(null);
@@ -315,7 +344,7 @@ export default function App() {
     [activeClient?.months]
   );
 
-  // Auth handlers
+  // Auth handlers: Always clear demo data on register/login so user starts clean
   const handleRegister = async (payload: { email: string; password: string; name: string }) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -328,11 +357,14 @@ export default function App() {
     setAuthToken(data.token);
     setUser(data.user);
     setTrial(data.trial);
-    setClients(data.clients || []);
-    if (data.clients?.length > 0) {
-      applyClientAndMonth(data.clients[0]);
+    const loadedClients: ClientProfile[] = data.clients || [];
+    setClients(loadedClients);
+    if (loadedClients.length > 0) {
+      applyClientAndMonth(loadedClients[0]);
+    } else {
+      resetToCleanWorkspace();
     }
-    showToast('تم إنشاء حسابك في Firebase وتفعيل الشهر المجاني (30 يوماً) بنجاح!');
+    showToast('تم إنشاء حسابك وتفعيل الشهر المجاني (30 يوماً) بنجاح! ابدأ برفع بياناتك الآن.');
   };
 
   const handleLogin = async (payload: { email: string; password: string }) => {
@@ -347,9 +379,12 @@ export default function App() {
     setAuthToken(data.token);
     setUser(data.user);
     setTrial(data.trial);
-    setClients(data.clients || []);
-    if (data.clients?.length > 0) {
-      applyClientAndMonth(data.clients[0]);
+    const loadedClients: ClientProfile[] = data.clients || [];
+    setClients(loadedClients);
+    if (loadedClients.length > 0) {
+      applyClientAndMonth(loadedClients[0]);
+    } else {
+      resetToCleanWorkspace();
     }
     showToast(`مرحباً بعودتك، ${data.user.name}`);
   };
@@ -433,7 +468,12 @@ export default function App() {
     if (res.ok) {
       const remaining = clients.filter((c) => c.id !== clientId);
       setClients(remaining);
-      if (remaining.length > 0) applyClientAndMonth(remaining[0]);
+      if (remaining.length > 0) {
+        applyClientAndMonth(remaining[0]);
+      } else {
+        setActiveClientId('');
+        resetToCleanWorkspace();
+      }
       showToast('تم حذف ملف العميل.');
     }
   };
@@ -455,37 +495,65 @@ export default function App() {
     setSelectedPlatform('all');
   };
 
+  // Auto-split multi-month campaigns by YYYY-MM and save each month snapshot separately
   const persistMonthToServer = useCallback(
     async (
       targetCampaigns: CampaignData[],
       targetAnalysis: AIAnalysisResult | null
     ) => {
-      if (!user || !activeClient) return;
+      if (!user || !activeClient || targetCampaigns.length === 0) return;
       setIsSavingMonth(true);
       try {
-        const res = await fetch(
-          `/api/clients/${activeClient.id}/months/${activeMonthKey}`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify({
-              campaigns: targetCampaigns,
-              label: formatMonthLabelAr(activeMonthKey),
-              aiAnalysis: targetAnalysis,
-            }),
-          }
-        );
-        const data = await res.json();
-        if (res.status === 402) {
-          setAuthModalState({ open: true, tab: 'billing' });
-          return;
-        }
-        if (res.ok && data.client) {
-          setClients((prev) =>
-            prev.map((c) => (c.id === data.client.id ? data.client : c))
+        const groupedByMonth = groupCampaignsByMonthKey(targetCampaigns, activeMonthKey);
+        const monthKeys = Object.keys(groupedByMonth).sort();
+        let latestUpdatedClient: ClientProfile | null = null;
+
+        for (const mKey of monthKeys) {
+          const monthRows = groupedByMonth[mKey];
+          const existingRows = activeClient.months?.[mKey]?.campaigns || [];
+          // Merge with existing month data if rows differ, or replace cleanly
+          const mergedRows =
+            existingRows.length > 0 && monthKeys.length > 1
+              ? [...existingRows, ...monthRows]
+              : monthRows;
+
+          const res = await fetch(
+            `/api/clients/${activeClient.id}/months/${mKey}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json', ...authHeaders },
+              body: JSON.stringify({
+                campaigns: mergedRows,
+                label: formatMonthLabelAr(mKey),
+                aiAnalysis: mKey === monthKeys[monthKeys.length - 1] ? targetAnalysis : null,
+              }),
+            }
           );
+          const data = await res.json();
+          if (res.status === 402) {
+            setAuthModalState({ open: true, tab: 'billing' });
+            return;
+          }
+          if (res.ok && data.client) {
+            latestUpdatedClient = data.client;
+          }
+        }
+
+        if (latestUpdatedClient) {
+          const finalClient = latestUpdatedClient;
+          setClients((prev) =>
+            prev.map((c) => (c.id === finalClient.id ? finalClient : c))
+          );
+          const lastSavedMonth = monthKeys[monthKeys.length - 1];
+          setActiveMonthKey(lastSavedMonth);
           setHasUnsavedChanges(false);
-          showToast(`تم حفظ بيانات ${formatMonthLabelAr(activeMonthKey)} للعميل بنجاح.`);
+
+          if (monthKeys.length > 1) {
+            const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
+            showToast(`تم تقسيم وحفظ البيانات تلقائياً في ${monthKeys.length} شهور منفصلة (${labels}).`);
+          } else {
+            showToast(`تم حفظ بيانات ${formatMonthLabelAr(lastSavedMonth)} للعميل بنجاح.`);
+          }
         }
       } finally {
         setIsSavingMonth(false);
@@ -560,7 +628,6 @@ export default function App() {
     }
   };
 
-  // Run AI analysis with strict session, trial/subscription & rate-limit enforcement
   const handleRunAiAnalysis = useCallback(async () => {
     if (filteredCampaigns.length === 0) return;
 
@@ -667,8 +734,20 @@ export default function App() {
       syncDatesFromCampaigns(nextDataset);
       setAiAnalysis(null);
       setHasUnsavedChanges(true);
+
+      const detectedMonths = Object.keys(
+        groupCampaignsByMonthKey(nextDataset, activeMonthKey)
+      ).sort();
+      if (detectedMonths.length > 1) {
+        const labels = detectedMonths.map((m) => formatMonthLabelAr(m)).join('، ');
+        showToast(
+          `تم اكتشاف بيانات لـ ${detectedMonths.length} شهور (${labels}). اضغط "حفظ الشهر" لتقسيمهم وحفظ كل شهر في ملفه تلقائياً.`
+        );
+      } else if (detectedMonths.length === 1 && !activeClient?.months?.[detectedMonths[0]]) {
+        setActiveMonthKey(detectedMonths[0]);
+      }
     },
-    [campaigns, syncDatesFromCampaigns]
+    [campaigns, syncDatesFromCampaigns, activeMonthKey, activeClient, showToast]
   );
 
   const handleLoadDemo = useCallback(() => {
@@ -778,65 +857,107 @@ export default function App() {
             onOpenAuthModal={(tab) => setAuthModalState({ open: true, tab: tab || 'register' })}
           />
 
-          {/* Row 1: Executive KPI Summary Cards */}
-          {reportSettings.visibleSections.kpis && (
-            <ExecutiveSummary
-              metrics={overallMetrics}
-              currency={currency}
-              targetCpa={targetCpa}
-            />
-          )}
+          {/* Clean Empty State for Authenticated Users with Zero Campaigns */}
+          {user && campaigns.length === 0 ? (
+            <div className="rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-8 sm:p-12 text-center space-y-5">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <div className="max-w-lg mx-auto space-y-2">
+                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  أهلاً بك في مساحة عملك، {user.name}!
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  لوحتك نظيفة وجاهزة الآن لاستقبال بيانات حملاتك الفعلية من سناب شات، تيك توك، ميتا، وجوجل. ارفع أول ملف تقرير أو اربط شيت جوجل للبدء فوراً.
+                </p>
+              </div>
 
-          {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
-          {reportSettings.visibleSections.platforms && (
-            <PlatformBreakdownCard
-              platforms={platformBreakdown}
-              currency={currency}
-              selectedPlatform={selectedPlatform}
-              onSelectPlatform={setSelectedPlatform}
-            />
-          )}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>ارفع أول ملف CSV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsIntegrationsOpen(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 transition-all cursor-pointer"
+                >
+                  <Link2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>اربط Google Sheets</span>
+                </button>
+              </div>
 
-          {/* Row 3: Interactive Charts */}
-          {reportSettings.visibleSections.charts && (
-            <PerformanceCharts
-              campaigns={filteredCampaigns}
-              dailyDays={dailyBreakdown.days}
-              hasExactDailyData={dailyBreakdown.summary.hasExactDailyData}
-              currency={currency}
-            />
-          )}
+              <p className="text-[11px] text-slate-500 dark:text-slate-500">
+                تحتاج لتجربة سريعة أولاً؟ يمكنك تحميل <strong>عينة البيانات</strong> من الشريط العلوي في أي وقت.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Row 1: Executive KPI Summary Cards */}
+              {reportSettings.visibleSections.kpis && (
+                <ExecutiveSummary
+                  metrics={overallMetrics}
+                  currency={currency}
+                  targetCpa={targetCpa}
+                />
+              )}
 
-          {/* Row 4: Day-by-Day & Ad-Level Breakdown */}
-          {reportSettings.visibleSections.dailyBreakdown && (
-            <DailyAdBreakdown
-              days={dailyBreakdown.days}
-              summary={dailyBreakdown.summary}
-              adBreakdown={adBreakdown}
-              currency={currency}
-            />
-          )}
+              {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
+              {reportSettings.visibleSections.platforms && (
+                <PlatformBreakdownCard
+                  platforms={platformBreakdown}
+                  currency={currency}
+                  selectedPlatform={selectedPlatform}
+                  onSelectPlatform={setSelectedPlatform}
+                />
+              )}
 
-          {/* Row 5: Detailed Campaigns Data Table */}
-          {reportSettings.visibleSections.campaignsTable && (
-            <CampaignsTable
-              campaigns={filteredCampaigns}
-              currency={currency}
-              avgCpa={overallMetrics.cpa}
-            />
-          )}
+              {/* Row 3: Interactive Charts */}
+              {reportSettings.visibleSections.charts && (
+                <PerformanceCharts
+                  campaigns={filteredCampaigns}
+                  dailyDays={dailyBreakdown.days}
+                  hasExactDailyData={dailyBreakdown.summary.hasExactDailyData}
+                  currency={currency}
+                />
+              )}
 
-          {/* Row 6 (Bottom): AI Campaign Intelligence & Historical Learning */}
-          {reportSettings.visibleSections.aiInsights && (
-            <AiAnalysisCard
-              analysis={aiAnalysis}
-              isLoading={isAiLoading}
-              onRunAnalysis={handleRunAiAnalysis}
-              campaigns={filteredCampaigns}
-              currency={currency}
-              historicalMonthsCount={previousStoredMonths.length}
-              clientName={activeClient?.name}
-            />
+              {/* Row 4: Day-by-Day & Ad-Level Breakdown */}
+              {reportSettings.visibleSections.dailyBreakdown && (
+                <DailyAdBreakdown
+                  days={dailyBreakdown.days}
+                  summary={dailyBreakdown.summary}
+                  adBreakdown={adBreakdown}
+                  currency={currency}
+                />
+              )}
+
+              {/* Row 5: Detailed Campaigns Data Table */}
+              {reportSettings.visibleSections.campaignsTable && (
+                <CampaignsTable
+                  campaigns={filteredCampaigns}
+                  currency={currency}
+                  avgCpa={overallMetrics.cpa}
+                />
+              )}
+
+              {/* Row 6 (Bottom): AI Campaign Intelligence & Historical Learning */}
+              {reportSettings.visibleSections.aiInsights && (
+                <AiAnalysisCard
+                  analysis={aiAnalysis}
+                  isLoading={isAiLoading}
+                  onRunAnalysis={handleRunAiAnalysis}
+                  campaigns={filteredCampaigns}
+                  currency={currency}
+                  historicalMonthsCount={previousStoredMonths.length}
+                  clientName={activeClient?.name}
+                />
+              )}
+            </>
           )}
         </main>
 
