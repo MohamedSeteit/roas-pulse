@@ -106,6 +106,7 @@ export default function App() {
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [activeClientId, setActiveClientId] = useState<string>('');
   const [activeMonthKey, setActiveMonthKey] = useState<string>(() => getCurrentMonthKey());
+  const [selectedMonthKeys, setSelectedMonthKeys] = useState<string[]>([]);
   const [localReportSettings, setLocalReportSettings] = useState<ReportCustomizationSettings>(() => {
     try {
       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
@@ -167,6 +168,8 @@ export default function App() {
     [clients, activeClientId]
   );
 
+  const isAggregatedView = selectedMonthKeys.length > 1;
+
   const reportSettings = activeClient?.reportSettings || localReportSettings;
   const themeMode: ThemeMode = reportSettings.themeMode === 'light' ? 'light' : 'dark';
   const targetCpa = reportSettings.targetCpa || 60;
@@ -195,7 +198,9 @@ export default function App() {
     setDateRange({ start: '', end: '' });
     setSelectedPlatform('all');
     setHasUnsavedChanges(false);
-    setActiveMonthKey(getCurrentMonthKey());
+    const currentMk = getCurrentMonthKey();
+    setActiveMonthKey(currentMk);
+    setSelectedMonthKeys([currentMk]);
   }, []);
 
   const applyClientAndMonth = useCallback(
@@ -217,6 +222,7 @@ export default function App() {
           : getCurrentMonthKey();
 
       setActiveMonthKey(targetMonth);
+      setSelectedMonthKeys([targetMonth]);
       const snapshot = client.months?.[targetMonth];
       if (snapshot) {
         setCampaigns(snapshot.campaigns || []);
@@ -324,10 +330,13 @@ export default function App() {
   // Month-over-Month comparison & historical client memory
   const previousStoredMonths = useMemo(() => {
     if (!activeClient?.months) return [];
+    const cutoffMonth = isAggregatedView
+      ? [...selectedMonthKeys].sort()[0]
+      : activeMonthKey;
     return Object.values(activeClient.months)
-      .filter((m) => m.monthKey < activeMonthKey)
+      .filter((m) => m.monthKey < cutoffMonth)
       .sort((a, b) => a.monthKey.localeCompare(b.monthKey));
-  }, [activeClient, activeMonthKey]);
+  }, [activeClient, activeMonthKey, isAggregatedView, selectedMonthKeys]);
 
   const previousMonthSnapshot = useMemo(() => {
     if (previousStoredMonths.length === 0) return null;
@@ -397,6 +406,7 @@ export default function App() {
     setTrial(null);
     setClients([]);
     setActiveClientId('');
+    setSelectedMonthKeys([]);
     const demo = generateDemoCampaigns();
     setCampaigns(demo);
     syncDatesFromCampaigns(demo);
@@ -480,6 +490,7 @@ export default function App() {
 
   const handleSelectMonth = (monthKey: string) => {
     setActiveMonthKey(monthKey);
+    setSelectedMonthKeys([monthKey]);
     if (activeClient?.months?.[monthKey]) {
       const snap = activeClient.months[monthKey];
       setCampaigns(snap.campaigns || []);
@@ -495,13 +506,64 @@ export default function App() {
     setSelectedPlatform('all');
   };
 
+  // Load aggregated campaigns for a list of selected month keys
+  const loadGroupedMonths = useCallback(
+    (keys: string[]) => {
+      if (!activeClient?.months) return;
+      const sorted = [...keys].sort();
+      if (sorted.length === 0) return;
+      if (sorted.length === 1) {
+        handleSelectMonth(sorted[0]);
+        return;
+      }
+      const combinedCampaigns: CampaignData[] = [];
+      for (const mk of sorted) {
+        const snap = activeClient.months[mk];
+        if (snap?.campaigns) {
+          combinedCampaigns.push(...snap.campaigns);
+        }
+      }
+      setSelectedMonthKeys(sorted);
+      setActiveMonthKey(sorted[sorted.length - 1]);
+      setCampaigns(combinedCampaigns);
+      setAiAnalysis(null);
+      syncDatesFromCampaigns(combinedCampaigns);
+      setHasUnsavedChanges(false);
+      setSelectedPlatform('all');
+    },
+    [activeClient, syncDatesFromCampaigns]
+  );
+
+  const handleSelectAllMonths = useCallback(() => {
+    if (!activeClient?.months) return;
+    const allKeys = Object.keys(activeClient.months).sort();
+    if (allKeys.length === 0) return;
+    loadGroupedMonths(allKeys);
+    showToast(`تم تجميع كافة الشهور المحفوظة (${allKeys.length} شهور) للعميل.`);
+  }, [activeClient, loadGroupedMonths, showToast]);
+
+  const handleToggleMonthInGroup = useCallback(
+    (monthKey: string) => {
+      const exists = selectedMonthKeys.includes(monthKey);
+      if (exists && selectedMonthKeys.length === 1) {
+        showToast('يجب اختيار شهر واحد على الأقل للعرض.', 'error');
+        return;
+      }
+      const nextKeys = exists
+        ? selectedMonthKeys.filter((k) => k !== monthKey)
+        : [...selectedMonthKeys, monthKey].sort();
+      loadGroupedMonths(nextKeys);
+    },
+    [selectedMonthKeys, loadGroupedMonths, showToast]
+  );
+
   // Auto-split multi-month campaigns by YYYY-MM and save each month snapshot separately
   const persistMonthToServer = useCallback(
     async (
       targetCampaigns: CampaignData[],
       targetAnalysis: AIAnalysisResult | null
     ) => {
-      if (!user || !activeClient || targetCampaigns.length === 0) return;
+      if (!user || !activeClient || targetCampaigns.length === 0 || isAggregatedView) return;
       setIsSavingMonth(true);
       try {
         const groupedByMonth = groupCampaignsByMonthKey(targetCampaigns, activeMonthKey);
@@ -511,7 +573,6 @@ export default function App() {
         for (const mKey of monthKeys) {
           const monthRows = groupedByMonth[mKey];
           const existingRows = activeClient.months?.[mKey]?.campaigns || [];
-          // Merge with existing month data if rows differ, or replace cleanly
           const mergedRows =
             existingRows.length > 0 && monthKeys.length > 1
               ? [...existingRows, ...monthRows]
@@ -546,6 +607,7 @@ export default function App() {
           );
           const lastSavedMonth = monthKeys[monthKeys.length - 1];
           setActiveMonthKey(lastSavedMonth);
+          setSelectedMonthKeys([lastSavedMonth]);
           setHasUnsavedChanges(false);
 
           if (monthKeys.length > 1) {
@@ -559,7 +621,7 @@ export default function App() {
         setIsSavingMonth(false);
       }
     },
-    [user, activeClient, activeMonthKey, authHeaders, showToast]
+    [user, activeClient, activeMonthKey, isAggregatedView, authHeaders, showToast]
   );
 
   const handleSaveReportSettings = async (
@@ -696,7 +758,9 @@ export default function App() {
 
       const data: AIAnalysisResult = await response.json();
       setAiAnalysis(data);
-      setHasUnsavedChanges(true);
+      if (!isAggregatedView) {
+        setHasUnsavedChanges(true);
+      }
     } catch (err) {
       console.error('AI Analysis failed, applying local fallback:', err);
       const { generateRuleBasedAnalysis } = await import('./utils/adMetrics');
@@ -723,6 +787,7 @@ export default function App() {
     previousMonthSnapshot,
     overallMetrics,
     reportSettings.targetRoas,
+    isAggregatedView,
     showToast,
   ]);
 
@@ -740,14 +805,16 @@ export default function App() {
       ).sort();
       if (detectedMonths.length > 1) {
         const labels = detectedMonths.map((m) => formatMonthLabelAr(m)).join('، ');
+        setSelectedMonthKeys([detectedMonths[detectedMonths.length - 1]]);
         showToast(
-          `تم اكتشاف بيانات لـ ${detectedMonths.length} شهور (${labels}). اضغط "حفظ الشهر" لتقسيمهم وحفظ كل شهر في ملفه تلقائياً.`
+          `تم اكتشاف بيانات لـ ${detectedMonths.length} شهور (${labels}). اضغط "حفظ بيانات الشهر" لتقسيمهم وحفظ كل شهر في ملفه تلقائياً.`
         );
-      } else if (detectedMonths.length === 1 && !activeClient?.months?.[detectedMonths[0]]) {
+      } else if (detectedMonths.length === 1) {
         setActiveMonthKey(detectedMonths[0]);
+        setSelectedMonthKeys([detectedMonths[0]]);
       }
     },
-    [campaigns, syncDatesFromCampaigns, activeMonthKey, activeClient, showToast]
+    [campaigns, syncDatesFromCampaigns, activeMonthKey, showToast]
   );
 
   const handleLoadDemo = useCallback(() => {
@@ -770,6 +837,17 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
   }, []);
+
+  const activePeriodDisplayLabel = useMemo(() => {
+    if (isAggregatedView) {
+      const storedCount = activeClient ? Object.keys(activeClient.months || {}).length : 0;
+      if (storedCount > 0 && selectedMonthKeys.length === storedCount) {
+        return `إجمالي كافة الشهور (${storedCount} شهور)`;
+      }
+      return selectedMonthKeys.map((k) => formatMonthLabelAr(k)).join(' + ');
+    }
+    return formatMonthLabelAr(activeMonthKey);
+  }, [isAggregatedView, activeClient, selectedMonthKeys, activeMonthKey]);
 
   const legalRoute = resolveLegalRoute(currentPath);
   if (legalRoute) {
@@ -840,6 +918,8 @@ export default function App() {
             clients={clients}
             activeClient={activeClient}
             activeMonthKey={activeMonthKey}
+            selectedMonthKeys={selectedMonthKeys}
+            isAggregatedView={isAggregatedView}
             currency={currency}
             hasUnsavedChanges={hasUnsavedChanges}
             isSavingMonth={isSavingMonth}
@@ -851,6 +931,8 @@ export default function App() {
             onCreateClient={handleCreateClient}
             onDeleteClient={handleDeleteClient}
             onSelectMonth={handleSelectMonth}
+            onSelectAllMonths={handleSelectAllMonths}
+            onToggleMonthInGroup={handleToggleMonthInGroup}
             onSaveMonth={() => persistMonthToServer(campaigns, aiAnalysis)}
             onOpenCustomizer={() => setIsCustomizerOpen(true)}
             onOpenIntegrations={() => setIsIntegrationsOpen(true)}
@@ -1020,7 +1102,7 @@ export default function App() {
         campaigns={filteredCampaigns}
         reportSettings={reportSettings}
         clientName={activeClient?.name}
-        activeMonthLabel={formatMonthLabelAr(activeMonthKey)}
+        activeMonthLabel={activePeriodDisplayLabel}
         monthlySeries={monthlySeries}
       />
 
