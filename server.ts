@@ -236,6 +236,14 @@ function normalizeWebhookCampaigns(rawItems: any[], sourceName: string): Campaig
   });
 }
 
+function safeParseAiJson(rawText: string): any {
+  const cleaned = rawText
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  return JSON.parse(cleaned || '{}');
+}
+
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
@@ -643,16 +651,32 @@ app.post(
       return;
     }
 
+    // Fast path: if the deterministic parser already recognizes standard tabular columns and extracts rows cleanly, return immediately
+    const deterministicParsed = parseCampaignCSV(rawText, { platformHint, fileName });
+    if (
+      deterministicParsed.data.length > 0 &&
+      deterministicParsed.meta.detectedPlatform !== 'unknown' &&
+      deterministicParsed.meta.mappedColumns.length >= 4
+    ) {
+      res.json({
+        campaigns: deterministicParsed.data,
+        errors: deterministicParsed.errors,
+        meta: deterministicParsed.meta,
+        aiMapped: false,
+        message: 'تمت قراءة وتحليل التقرير بدقة عبر محرك المطابقة الذكي.',
+      });
+      return;
+    }
+
     const lines = rawText.replace(/^\uFEFF/, '').split(/\r?\n/);
-    const samplePreview = lines.slice(0, 24).join('\n').slice(0, 2800);
+    const samplePreview = lines.slice(0, 15).join('\n').slice(0, 2200);
 
     // If Gemini client is unavailable, use the deterministic multi-platform parser
     if (!ai || !apiKey) {
-      const parsed = parseCampaignCSV(rawText, { platformHint, fileName });
       res.json({
-        campaigns: parsed.data,
-        errors: parsed.errors,
-        meta: parsed.meta,
+        campaigns: deterministicParsed.data,
+        errors: deterministicParsed.errors,
+        meta: deterministicParsed.meta,
         aiMapped: false,
         message: 'تم التحليل عبر المحرك الذكي المحلي للأنماط.',
       });
@@ -661,26 +685,25 @@ app.post(
 
     const extractionPrompt = `أنت محلل بيانات إعلانية متخصص في ملفات التقارير المصدرة من منصات: سناب شات (Snapchat Ads)، تيك توك (TikTok Ads)، ميتا (Meta / Facebook & Instagram)، وإعلانات جوجل (Google Ads).
 اسم الملف: "${fileName || 'غير محدد'}"
-تلميح المنصة من المستخدم: "${platformHint || 'auto'}"
+تلميح المنصة: "${platformHint || 'auto'}"
 
-فيما يلي أول 24 سطراً من الملف أو التقرير النصي المرفوع:
+أول 15 سطراً من الملف:
 ---
 ${samplePreview}
 ---
 
 المطلوب:
-1. حدد هل البيانات جدولية (CSV / TSV / جدول منظم) أم نص تقرير غير جدولي (isTabular).
-2. حدد المنصة الإعلانية (detectedPlatform): snapchat أو tiktok أو meta أو google أو mixed أو other.
-3. إذا كانت البيانات جدولية:
-   - حدد رقم سطر الترويسة الحقيقي (headerRowIndex يبدأ من 0)، مع تخطي أي أسطر عنوان أو تاريخ أعلى الملف (مثل تقارير Google Ads).
-   - طابق أسماء الأعمدة الحرفية الموجودة في الترويسة مع الحقول القياسية في columnMapping (اترك الحقل فارغاً "" إذا لم يوجد عمود مطابق).
-4. فقط إذا كانت البيانات غير جدولية (isTabular = false)، استخرج الصفوف مباشرة في extractedRows.`;
+1. حدد هل البيانات جدولية (isTabular = true) أم نص تقرير غير جدولي (isTabular = false).
+2. حدد المنصة (detectedPlatform): snapchat أو tiktok أو meta أو google أو mixed أو other.
+3. إذا كانت جدولية (isTabular = true)، حدد headerRowIndex (يبدأ من 0) وطابق أسماء الأعمدة الحرفية في columnMapping، واترك extractedRows مصفوفة فارغة [].
+4. فقط إذا كانت غير جدولية (isTabular = false)، استخرج الصفوف في extractedRows.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: extractionPrompt,
       config: {
-        maxOutputTokens: 1200,
+        maxOutputTokens: 8192,
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -734,7 +757,7 @@ ${samplePreview}
       },
     });
 
-    const aiJson = JSON.parse(response.text || '{}');
+    const aiJson = safeParseAiJson(response.text || '{}');
 
     if (aiJson.isTabular !== false) {
       const resolvedHint: AdPlatform | 'auto' =
@@ -832,7 +855,7 @@ ${samplePreview}
       message: 'تم استخراج المؤشرات من التقرير النصي عبر Gemini AI.',
     });
   } catch (error) {
-    console.error('AI report extraction error, using deterministic parser fallback:', error);
+    console.warn('AI report extraction fallback used:', error instanceof Error ? error.message : error);
     const { rawText, fileName, platformHint } = req.body as {
       rawText: string;
       fileName?: string;
@@ -945,7 +968,8 @@ app.post(
       contents: `حلل بيانات الحملات الموجزة التالية (محددة الحجم لضمان السرعة والكفاءة) واستخرج تقريراً استراتيجياً متكاملاً:\n${promptBudget.serializedJson}`,
       config: {
         systemInstruction,
-        maxOutputTokens: MAX_AI_OUTPUT_TOKENS,
+        maxOutputTokens: Math.max(MAX_AI_OUTPUT_TOKENS, 4096),
+        thinkingConfig: { thinkingBudget: 0 },
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -1092,7 +1116,7 @@ app.post(
       throw new Error('لم يتم استلام نص من نموذج الذكاء الاصطناعي.');
     }
 
-    const parsedJson = JSON.parse(resultText);
+    const parsedJson = safeParseAiJson(resultText);
     parsedJson.generatedAt = new Date().toLocaleString('ar-SA');
     parsedJson.aiModelLabel = 'Gemini 2.5 Flash';
     parsedJson.tokenBudget = {
