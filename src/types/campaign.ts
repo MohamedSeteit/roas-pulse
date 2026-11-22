@@ -3,8 +3,11 @@ export type AdPlatform = 'snapchat' | 'tiktok' | 'meta' | 'google' | 'other';
 export interface CampaignData {
   id: string;
   campaignName: string;
+  campaignType?: string; // نوع الحملة (e.g. Web Conversions, App Installs, Shopping)
   adSetName?: string; // المجموعة الإعلانية / Ad Set / Ad Squad / Ad Group
+  adGroupId?: string; // معرف المجموعة الإعلانية (Ad group ID)
   adName?: string; // اسم الإعلان / Ad Name / Creative
+  adId?: string; // معرف الإعلان (Ad ID)
   platform: AdPlatform;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
@@ -15,11 +18,16 @@ export interface CampaignData {
   purchases: number; // عدد الطلبات / التحويلات
   impressions: number; // مرات الظهور / الانتشار
   clicks: number; // النقرات
-  addToCart?: number; // الإضافة للسلة
+  pageViews?: number; // زيارات الصفحة (Page views)
+  addToCart?: number; // الإضافة للسلة (Adds to cart)
+  checkoutsInitiated?: number; // بدء إتمام الدفع (Checkouts initiated)
   reach?: number; // الوصول
   frequency?: number; // التكرار
+  costPerPageView?: number; // تكلفة زيارة الصفحة
   costPerAddToCart?: number; // تكلفة الإضافة للسلة = spend / addToCart
+  costPerCheckout?: number; // تكلفة بدء الدفع
   cartConversionRate?: number; // معدل تحويل السلة إلى شراء = (purchases / addToCart) * 100
+  checkoutToPurchaseRate?: number; // معدل إتمام الدفع = (purchases / checkoutsInitiated) * 100
   roas: number; // العائد على الإنفاق = revenue / spend
   cpa: number; // ثمن البيعة / تكلفة الشراء = spend / purchases
   ctr: number; // نسبة النقر للظهور = (clicks / impressions) * 100
@@ -34,14 +42,19 @@ export interface AggregatedMetrics {
   totalPurchases: number;
   totalImpressions: number;
   totalClicks: number;
+  totalPageViews: number;
   totalAddToCart: number;
+  totalCheckoutsInitiated: number;
   roas: number; // Overall ROAS
   cpa: number; // Average CPA
   ctr: number; // Average CTR (%)
   cpc: number; // Average CPC
   cpm: number; // Average CPM
+  costPerPageView: number;
   costPerAddToCart: number;
+  costPerCheckout: number;
   cartConversionRate: number;
+  checkoutToPurchaseRate: number;
   netProfitEstimate: number; // Revenue - Spend
   aov: number; // Average Order Value = Revenue / Purchases
   campaignCount: number;
@@ -65,7 +78,9 @@ export interface DailyBreakdownItem {
   purchases: number;
   impressions: number;
   clicks: number;
+  pageViews: number;
   addToCart: number;
+  checkoutsInitiated: number;
   roas: number;
   cpa: number;
   ctr: number;
@@ -103,8 +118,11 @@ export interface DailyIntelligenceSummary {
 export interface AdBreakdownItem {
   key: string;
   adName: string;
+  adId?: string;
   adSetName?: string;
+  adGroupId?: string;
   campaignName: string;
+  campaignType?: string;
   platform: AdPlatform;
   daysActive: number;
   firstDate: string;
@@ -114,13 +132,49 @@ export interface AdBreakdownItem {
   purchases: number;
   impressions: number;
   clicks: number;
+  pageViews: number;
   addToCart: number;
+  checkoutsInitiated: number;
   roas: number;
   cpa: number;
   ctr: number;
   cpc: number;
   cpm: number;
   fatigueSignal: 'healthy' | 'watch' | 'fatigued';
+}
+
+export interface HierarchyDrilldownRow {
+  key: string;
+  level: 'campaign' | 'adGroup' | 'ad';
+  primaryName: string;
+  entityId?: string;
+  campaignName: string;
+  campaignType?: string;
+  adSetName?: string;
+  adGroupId?: string;
+  adName?: string;
+  adId?: string;
+  platform: AdPlatform;
+  startDate: string;
+  endDate: string;
+  subItemsCount: number; // عدد المجموعات أو الإعلانات التابعة
+  spend: number;
+  revenue: number;
+  purchases: number;
+  impressions: number;
+  clicks: number;
+  pageViews: number;
+  addToCart: number;
+  checkoutsInitiated: number;
+  roas: number;
+  cpa: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  costPerAddToCart: number;
+  costPerCheckout: number;
+  cartConversionRate: number;
+  checkoutToPurchaseRate: number;
 }
 
 export interface ReportParseMeta {
@@ -131,6 +185,7 @@ export interface ReportParseMeta {
   mappedColumns: string[];
   rawHeaders: string[];
   hasAdLevelDetails: boolean;
+  hasFunnelDetails: boolean;
 }
 
 export type PerformanceTier = 'exceptional' | 'good' | 'average' | 'poor';
