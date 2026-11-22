@@ -11,6 +11,9 @@ import {
   Image as ImageIcon,
   Funnel,
   DollarSign,
+  EyeOff,
+  Eye,
+  XCircle,
 } from 'lucide-react';
 import {
   getPerformanceTier,
@@ -47,6 +50,8 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
 }) => {
   const [activeLevel, setActiveLevel] = useState<HierarchyLevel>('campaign');
   const [metricView, setMetricView] = useState<MetricDisplayMode>('financial');
+  const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string>('');
+  const [hideZeroSpend, setHideZeroSpend] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState<'all' | 'exceptional' | 'good' | 'average' | 'poor'>('all');
   const [sortField, setSortField] = useState<SortField>('spend');
@@ -56,19 +61,30 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [campaigns, activeLevel]);
+    setSelectedCampaignFilter('');
+  }, [campaigns]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeLevel, selectedCampaignFilter, hideZeroSpend]);
+
+  // Scoped campaigns when user clicks a specific campaign to inspect its ad groups/ads
+  const scopedCampaigns = useMemo(() => {
+    if (!selectedCampaignFilter) return campaigns;
+    return campaigns.filter((c) => c.campaignName === selectedCampaignFilter);
+  }, [campaigns, selectedCampaignFilter]);
 
   const campaignRows = useMemo(
     () => buildHierarchyDrilldown(campaigns, 'campaign'),
     [campaigns]
   );
   const adGroupRows = useMemo(
-    () => buildHierarchyDrilldown(campaigns, 'adGroup'),
-    [campaigns]
+    () => buildHierarchyDrilldown(scopedCampaigns, 'adGroup'),
+    [scopedCampaigns]
   );
   const adRows = useMemo(
-    () => buildHierarchyDrilldown(campaigns, 'ad'),
-    [campaigns]
+    () => buildHierarchyDrilldown(scopedCampaigns, 'ad'),
+    [scopedCampaigns]
   );
 
   const hasFunnelMetrics = useMemo(
@@ -85,6 +101,11 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
     return campaignRows;
   }, [activeLevel, campaignRows, adGroupRows, adRows]);
 
+  const zeroRowsCount = useMemo(
+    () => activeDataset.filter((r) => r.spend === 0 && r.impressions === 0).length,
+    [activeDataset]
+  );
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -98,6 +119,10 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
   const filteredAndSortedRows = useMemo(() => {
     return activeDataset
       .filter((r) => {
+        if (hideZeroSpend && r.spend === 0 && r.impressions === 0) {
+          return false;
+        }
+
         const q = searchTerm.toLowerCase().trim();
         if (q) {
           const matchesSearch =
@@ -127,7 +152,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
         }
         return sortOrder === 'asc' ? valA - valB : valB - valA;
       });
-  }, [activeDataset, searchTerm, tierFilter, sortField, sortOrder, avgCpa]);
+  }, [activeDataset, hideZeroSpend, searchTerm, tierFilter, sortField, sortOrder, avgCpa]);
 
   const totalPages = Math.ceil(filteredAndSortedRows.length / pageSize) || 1;
   const paginatedRows = filteredAndSortedRows.slice(
@@ -143,10 +168,10 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
         ? 'المجموعات_الاعلانية'
         : 'الاعلانات';
     const headers =
-      'المستوى,الاسم,المعرف ID,الحملة,نوع الحملة,المجموعة الإعلانية,المنصة,المصروف,المبيعات,العائد ROAS,ثمن البيعة CPA,الظهور,النقرات,زيارات الصفحة,الإضافة للسلة,بدء الدفع,المشتريات\n';
+      'المستوى,الاسم,المعرف ID,نوع الحملة,الحملة,المجموعة الإعلانية,المنصة,المصروف,المبيعات,العائد ROAS,ثمن البيعة CPA,الطلبات,زيارات الصفحة,الإضافة للسلة,بدء الدفع,الظهور,النقرات\n';
     const rows = filteredAndSortedRows.map(
       (r) =>
-        `"${levelLabel}","${r.primaryName.replace(/"/g, '""')}","${r.entityId || ''}","${r.campaignName.replace(/"/g, '""')}","${r.campaignType || ''}","${(r.adSetName || '').replace(/"/g, '""')}","${PLATFORM_NAMES_AR[r.platform] || r.platform}",${r.spend},${r.revenue},${r.roas},${r.cpa},${r.impressions},${r.clicks},${r.pageViews},${r.addToCart},${r.checkoutsInitiated},${r.purchases}`
+        `"${levelLabel}","${r.primaryName.replace(/"/g, '""')}","${r.entityId || ''}","${r.campaignType || ''}","${r.campaignName.replace(/"/g, '""')}","${(r.adSetName || '').replace(/"/g, '""')}","${PLATFORM_NAMES_AR[r.platform] || r.platform}",${r.spend},${r.revenue},${r.roas},${r.cpa},${r.purchases},${r.pageViews},${r.addToCart},${r.checkoutsInitiated},${r.impressions},${r.clicks}`
     );
     const blob = new Blob(['\ufeff' + headers + rows.join('\n')], {
       type: 'text/csv;charset=utf-8;',
@@ -167,18 +192,37 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5 space-y-4 shadow-sm">
       {/* Header & Hierarchy Tabs */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-3.5">
-        <div className="space-y-2">
-          <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <span>التحليل الهرمي المفصّل (حملات • مجموعات إعلانية • إعلانات)</span>
-          </h3>
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+              <span>التحليل المفصّل (حملات • مجموعات إعلانية • إعلانات)</span>
+            </h3>
 
-          {/* 3 Hierarchy Level Tabs */}
-          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedCampaignFilter && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+                <span>حملة: {selectedCampaignFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCampaignFilter('')}
+                  title="إلغاء تحديد الحملة وعرض الكل"
+                  className="hover:text-rose-500 cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            )}
+          </div>
+
+          {/* 3 Clean Hierarchy Level Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setActiveLevel('campaign')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              onClick={() => {
+                setSelectedCampaignFilter('');
+                setActiveLevel('campaign');
+              }}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeLevel === 'campaign'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -191,7 +235,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
             <button
               type="button"
               onClick={() => setActiveLevel('adGroup')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeLevel === 'adGroup'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -204,7 +248,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
             <button
               type="button"
               onClick={() => setActiveLevel('ad')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeLevel === 'ad'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -216,7 +260,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
 
             {/* Metric Display Mode Toggle: Financial vs Full Funnel */}
             {hasFunnelMetrics && (
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 mr-1">
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setMetricView('financial')}
@@ -227,7 +271,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   }`}
                 >
                   <DollarSign className="w-3 h-3" />
-                  <span>الأداء المالي (ROAS)</span>
+                  <span>الأداء المالي</span>
                 </button>
                 <button
                   type="button"
@@ -243,6 +287,24 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                 </button>
               </div>
             )}
+
+            {/* Toggle zero-spend rows */}
+            {zeroRowsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setHideZeroSpend((v) => !v)}
+                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold border transition-all cursor-pointer ${
+                  hideZeroSpend
+                    ? 'bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {hideZeroSpend ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                <span>
+                  {hideZeroSpend ? `إظهار المتوقفة (${zeroRowsCount})` : 'إخفاء المتوقفة (0 صرف)'}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -254,17 +316,17 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
               type="text"
               placeholder={
                 activeLevel === 'campaign'
-                  ? 'ابحث باسم الحملة أو نوعها...'
+                  ? 'ابحث باسم الحملة...'
                   : activeLevel === 'adGroup'
                   ? 'ابحث بالمجموعة أو ID...'
-                  : 'ابحث باسم الإعلان أو ID...'
+                  : 'ابحث بالإعلان أو ID...'
               }
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 text-slate-900 dark:text-slate-200 text-xs rounded-xl pr-9 pl-3 py-2 w-48 sm:w-60 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 text-slate-900 dark:text-slate-200 text-xs rounded-xl pr-9 pl-3 py-2 w-44 sm:w-56 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
 
@@ -280,7 +342,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
               className="bg-transparent text-slate-900 dark:text-slate-200 font-medium focus:outline-none cursor-pointer"
             >
               <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                كافة مستويات الأداء
+                كافة المستويات
               </option>
               <option value="exceptional" className="bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400">
                 استثنائي (ROAS &gt; 4.0x)
@@ -301,19 +363,19 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
             type="button"
             onClick={exportFilteredCSV}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
-            title="تصدير التاب الحالي لملف CSV"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>تصدير CSV</span>
+            <span>CSV</span>
           </button>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Clean Structured Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
         <table className="w-full text-right text-xs">
           <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
             <tr>
+              {/* Column 1: Primary Entity Name */}
               <th
                 onClick={() => handleSort('primaryName')}
                 className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
@@ -321,18 +383,37 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                 <div className="flex items-center gap-1">
                   <span>
                     {activeLevel === 'campaign'
-                      ? 'اسم الحملة والنوع'
+                      ? 'اسم الحملة'
                       : activeLevel === 'adGroup'
-                      ? 'المجموعة الإعلانية (Ad Group)'
-                      : 'اسم الإعلان (Ad / Creative)'}
+                      ? 'اسم المجموعة الإعلانية'
+                      : 'اسم الإعلان'}
                   </span>
                   <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
-              <th className="py-3 px-3">المنصة</th>
+
+              {/* Column 2: Dedicated ID or Campaign Type Column */}
+              <th className="py-3 px-3 whitespace-nowrap">
+                {activeLevel === 'campaign'
+                  ? 'نوع الحملة'
+                  : activeLevel === 'adGroup'
+                  ? 'معرّف المجموعة (ID)'
+                  : 'معرّف الإعلان (ID)'}
+              </th>
+
+              {/* Column 3: Parent Context (only for AdGroup & Ad) or Platform */}
+              {activeLevel !== 'campaign' && (
+                <th className="py-3 px-3 whitespace-nowrap">
+                  {activeLevel === 'adGroup' ? 'الحملة التابعة لها' : 'المجموعة / الحملة'}
+                </th>
+              )}
+
+              <th className="py-3 px-3 whitespace-nowrap">المنصة</th>
+
+              {/* Core Ordered Metrics: Spend -> Revenue -> ROAS -> CPA -> Purchases */}
               <th
                 onClick={() => handleSort('spend')}
-                className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
               >
                 <div className="flex items-center gap-1">
                   <span>المصروف</span>
@@ -344,7 +425,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                 <>
                   <th
                     onClick={() => handleSort('revenue')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>المبيعات</span>
@@ -353,7 +434,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('roas')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>العائد (ROAS)</span>
@@ -362,7 +443,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('cpa')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>ثمن البيعة (CPA)</span>
@@ -371,30 +452,19 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('purchases')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>المشتريات</span>
+                      <span>الطلبات</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
-                  {hasFunnelMetrics && (
-                    <th
-                      onClick={() => handleSort('addToCart')}
-                      className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span>السلات / الدفع</span>
-                        <ArrowUpDown className="w-3 h-3" />
-                      </div>
-                    </th>
-                  )}
                   <th
                     onClick={() => handleSort('impressions')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الظهور والنقرات</span>
+                      <span>الظهور / النقرات</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -403,7 +473,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                 <>
                   <th
                     onClick={() => handleSort('impressions')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>الظهور</span>
@@ -412,16 +482,16 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('clicks')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>النقرات (CTR)</span>
+                      <span>النقرات</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
                   <th
                     onClick={() => handleSort('pageViews')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>زيارات الصفحة</span>
@@ -430,7 +500,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('addToCart')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>إضافة للسلة</span>
@@ -439,7 +509,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('checkoutsInitiated')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
                       <span>بدء الدفع</span>
@@ -448,24 +518,25 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                   </th>
                   <th
                     onClick={() => handleSort('purchases')}
-                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الشراء (ROAS)</span>
+                      <span>الشراء</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
                 </>
               )}
 
-              <th className="py-3 px-3 text-center">حالة الكفاءة</th>
+              <th className="py-3 px-3 text-center whitespace-nowrap">التقييم</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 text-slate-800 dark:text-slate-200">
             {paginatedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-500">
-                  لا توجد بيانات تطابق البحث أو الفلتر المحدد في هذا التاب.
+                <td colSpan={11} className="py-8 text-center text-slate-500">
+                  لا توجد عناصر مطابقة في هذا المستوى.
                 </td>
               </tr>
             ) : (
@@ -475,43 +546,28 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                 return (
                   <tr
                     key={r.key}
-                    className="hover:bg-slate-100/80 dark:hover:bg-slate-900/60 transition-colors group"
+                    className="hover:bg-slate-100/80 dark:hover:bg-slate-900/60 transition-colors"
                   >
-                    {/* Hierarchy Name + Metadata */}
-                    <td className="py-3 px-3 font-semibold text-slate-900 dark:text-slate-100 max-w-[270px]">
-                      <div className="truncate font-sans" title={r.primaryName}>
-                        {r.primaryName}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        {r.entityId && (
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                            ID: {r.entityId}
-                          </span>
-                        )}
-                        {activeLevel === 'campaign' && r.campaignType && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
-                            {r.campaignType}
-                          </span>
-                        )}
-                        {activeLevel === 'campaign' && r.subItemsCount > 1 && (
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                            ({r.subItemsCount} عناصر فرعية)
-                          </span>
-                        )}
-                        {activeLevel === 'adGroup' && (
-                          <span className="text-[10px] text-indigo-700 dark:text-indigo-300/80 truncate">
-                            الحملة: {r.campaignName}
-                          </span>
-                        )}
-                        {activeLevel === 'ad' && (
-                          <span className="text-[10px] text-indigo-700 dark:text-indigo-300/80 truncate">
-                            {r.campaignName}
-                            {r.adSetName ? ` • ${r.adSetName}` : ''}
-                          </span>
+                    {/* 1. Primary Name + Date Range */}
+                    <td className="py-3 px-3 font-semibold text-slate-900 dark:text-slate-100 max-w-[240px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate" title={r.primaryName}>
+                          {r.primaryName}
+                        </span>
+                        {activeLevel === 'campaign' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCampaignFilter(r.campaignName);
+                              setActiveLevel('adGroup');
+                            }}
+                            title="عرض المجموعات الإعلانية لهذه الحملة"
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shrink-0 cursor-pointer"
+                          >
+                            تفاصيل ←
+                          </button>
                         )}
                       </div>
-
                       <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-mono mt-0.5">
                         {r.startDate && r.endDate && r.startDate !== r.endDate
                           ? `${r.startDate} ↔ ${r.endDate}`
@@ -519,12 +575,52 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                       </span>
                     </td>
 
+                    {/* 2. Dedicated ID or Campaign Type */}
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      {activeLevel === 'campaign' ? (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
+                          {r.campaignType || 'قياسي'}
+                        </span>
+                      ) : (
+                        <span
+                          dir="ltr"
+                          className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 select-all"
+                        >
+                          {r.entityId || '—'}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* 3. Parent Context for Ad Group / Ad */}
+                    {activeLevel !== 'campaign' && (
+                      <td className="py-3 px-3 text-slate-600 dark:text-slate-400 max-w-[200px]">
+                        {activeLevel === 'adGroup' ? (
+                          <div className="truncate" title={r.campaignName}>
+                            {r.campaignName}
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="truncate text-slate-700 dark:text-slate-300" title={r.adSetName || r.campaignName}>
+                              {r.adSetName || r.campaignName}
+                            </div>
+                            {r.adSetName && (
+                              <span className="text-[10px] text-slate-500 truncate block" title={r.campaignName}>
+                                {r.campaignName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    )}
+
+                    {/* 4. Platform */}
                     <td className="py-3 px-3 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">
                         {PLATFORM_NAMES_AR[r.platform] || r.platform}
                       </span>
                     </td>
 
+                    {/* 5. Spend */}
                     <td className="py-3 px-3 font-bold whitespace-nowrap tabular-nums">
                       {r.spend.toLocaleString()} {currency}
                     </td>
@@ -552,26 +648,11 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                         <td className="py-3 px-3 font-bold whitespace-nowrap tabular-nums">
                           {r.cpa} {currency}
                         </td>
-                        <td className="py-3 px-3 font-medium whitespace-nowrap tabular-nums">
+                        <td className="py-3 px-3 font-bold whitespace-nowrap tabular-nums">
                           {r.purchases}
                         </td>
-                        {hasFunnelMetrics && (
-                          <td className="py-3 px-3 font-medium whitespace-nowrap text-purple-700 dark:text-purple-300 tabular-nums">
-                            <div>
-                              سلة: {r.addToCart.toLocaleString()}
-                              {r.checkoutsInitiated > 0
-                                ? ` • دفع: ${r.checkoutsInitiated.toLocaleString()}`
-                                : ''}
-                            </div>
-                            {r.costPerAddToCart > 0 && (
-                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
-                                ({r.costPerAddToCart} {currency}/سلة)
-                              </span>
-                            )}
-                          </td>
-                        )}
                         <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap tabular-nums">
-                          <div>{r.impressions.toLocaleString()}</div>
+                          <div>{r.impressions.toLocaleString()} ظهور</div>
                           <span className="text-[10px] text-slate-500">
                             {r.clicks.toLocaleString()} نقرة ({r.ctr}%)
                           </span>
@@ -593,7 +674,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                           <div className="font-semibold">{r.addToCart.toLocaleString()}</div>
                           {r.costPerAddToCart > 0 && (
                             <span className="text-[10px] text-slate-500">
-                              {r.costPerAddToCart} {currency}/سلة
+                              {r.costPerAddToCart} {currency}
                             </span>
                           )}
                         </td>
@@ -601,13 +682,13 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
                           <div className="font-semibold">{r.checkoutsInitiated.toLocaleString()}</div>
                           {r.costPerCheckout > 0 && (
                             <span className="text-[10px] text-slate-500">
-                              {r.costPerCheckout} {currency}/دفع
+                              {r.costPerCheckout} {currency}
                             </span>
                           )}
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap tabular-nums">
                           <div className="font-bold text-emerald-700 dark:text-emerald-400">
-                            {r.purchases} ({r.roas}x)
+                            {r.purchases} طلب ({r.roas}x)
                           </div>
                           {r.checkoutToPurchaseRate > 0 && (
                             <span className="text-[10px] text-slate-500">
