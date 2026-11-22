@@ -13,9 +13,6 @@ import type {
 } from '../types/campaign.ts';
 import Papa from 'papaparse';
 
-/**
- * Normalizes string keys for header matching (lowercased, trimmed, stripped of special chars & diacritics).
- */
 export function normalizeHeader(header: string): string {
   return header
     .replace(/^\uFEFF/, '')
@@ -27,10 +24,6 @@ export function normalizeHeader(header: string): string {
     .replace(/ى/g, 'ي');
 }
 
-/**
- * Robustly parses a numeric string into a float, stripping currencies ($, SAR, AED, ر.س, etc.),
- * English commas, Arabic commas, percentages, and converting Arabic digits (٠-٩) to English digits.
- */
 export function parseNumber(val: unknown): number {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (val === null || val === undefined) return 0;
@@ -64,13 +57,10 @@ const MONTH_MAP: Record<string, string> = {
   dec: '12', december: '12',
 };
 
-/**
- * Normalizes date formats to standard ISO YYYY-MM-DD.
- */
 export function normalizeDate(raw: unknown): string {
   if (!raw) return '';
   let str = String(raw).trim();
-  if (!str) return '';
+  if (!str || str === '-' || str === '--') return '';
 
   const isoPrefix = str.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})[T\s].*$/);
   if (isoPrefix) {
@@ -116,9 +106,6 @@ export function normalizeDate(raw: unknown): string {
   return str;
 }
 
-/**
- * Detects the ad platform from platform name or campaign text.
- */
 export function detectPlatform(text: string): AdPlatform {
   const norm = text.toLowerCase();
   if (norm.includes('snap') || norm.includes('سناب')) return 'snapchat';
@@ -151,9 +138,6 @@ export function detectPlatform(text: string): AdPlatform {
   return 'other';
 }
 
-/**
- * Infers which ad platform exported a report based on native header signatures and file name.
- */
 export function detectPlatformFromHeaders(headers: string[], fileName = ''): AdPlatform | 'unknown' {
   const joined = headers.map((h) => h.toLowerCase()).join(' | ');
   const fileNorm = fileName.toLowerCase();
@@ -251,19 +235,30 @@ const HEADER_MATCH_KEYWORDS = [
   'منصه', 'platform', 'channel',
 ];
 
-function isSummaryOrTotalRow(values: string[]): boolean {
-  const joined = values.join(' ').toLowerCase().trim();
-  if (!joined) return true;
-  return (
-    /^(total|grand total|summary|all campaigns|account total|total:|الإجمالي|المجموع|الاجمالي|إجمالي)/i.test(joined) ||
-    values.some((v) => /^(total:|total\b|grand total|الإجمالي|المجموع|إجمالي الحساب)/i.test(v.trim()))
+/**
+ * Detects summary/total rows across all platform formats, including TikTok's
+ * "Total of X results" placed in the first column ("Account name") with "-" in other dimension columns.
+ */
+function isSummaryOrTotalRow(allRowValues: string[], dimensionValues: string[]): boolean {
+  const joinedAll = allRowValues.join(' ').toLowerCase().trim();
+  if (!joinedAll) return true;
+
+  const hasTotalKeyword = allRowValues.some((v) =>
+    /^(total(\s+of\s+\d+\s+results)?|total:|grand\s+total|summary|all\s+campaigns|account\s+total|الإجمالي|المجموع|الاجمالي|إجمالي(\s+الحساب)?)$/i.test(
+      v.trim()
+    )
   );
+  if (hasTotalKeyword) return true;
+
+  // If all dimension fields (campaign, ad group, ad, date) are empty or just "-" / "--"
+  const meaningfulDimensions = dimensionValues.filter(
+    (d) => d && d !== '-' && d !== '--' && d.toLowerCase() !== 'n/a'
+  );
+  if (meaningfulDimensions.length === 0) return true;
+
+  return false;
 }
 
-/**
- * Scans the first 12 rows of a raw CSV/TSV report to locate the true column header row
- * and returns structured row objects.
- */
 export function extractTableFromRawReport(rawText: string, forcedHeaderIndex?: number): {
   headers: string[];
   rows: Record<string, unknown>[];
@@ -392,11 +387,11 @@ export interface ParseCampaignOptions {
   >>;
 }
 
-/**
- * Parses raw CSV/TSV string (including full-funnel TikTok, Snapchat, Meta, and Google Ads exports)
- * into structured CampaignData with Campaign Type, Ad Group Name/ID, Ad Name/ID,
- * and Full Funnel metrics (Page Views, Adds to Cart, Checkouts Initiated, Purchases).
- */
+function cleanDimensionText(val: unknown): string {
+  const s = String(val ?? '').trim();
+  return s === '-' || s === '--' ? '' : s;
+}
+
 export function parseCampaignCSV(
   csvString: string,
   options: ParseCampaignOptions = {}
@@ -439,7 +434,6 @@ export function parseCampaignCSV(
     }
   }
 
-  // Pass 1: Specific & exact columns (IDs, Types, Funnel steps) before broad fallbacks
   for (const h of rawHeaders) {
     const norm = normalizeHeader(h);
 
@@ -638,7 +632,6 @@ export function parseCampaignCSV(
     }
   }
 
-  // Fallback for purchases if report only had generic "Conversions" / "Results" without "Purchases"
   if (!headerMap.purchases) {
     for (const h of rawHeaders) {
       const norm = normalizeHeader(h);
@@ -683,25 +676,38 @@ export function parseCampaignCSV(
     const nonEmptyCount = rawValues.filter((v) => v !== '').length;
     if (nonEmptyCount === 0) return;
 
-    const rawPlatform = String(
+    const rawPlatform = cleanDimensionText(
       (headerMap.platform && row[headerMap.platform]) || row['Platform'] || row['المنصة'] || ''
-    ).trim();
+    );
 
-    const campaignName = String(
+    const campaignName = cleanDimensionText(
       (headerMap.campaign && row[headerMap.campaign]) ||
         row['Campaign'] ||
         row['Campaign Name'] ||
         row['اسم الحملة'] ||
         ''
-    ).trim();
+    );
 
-    const campaignType = String((headerMap.campaignType && row[headerMap.campaignType]) || '').trim();
-    const adSetName = String((headerMap.adSet && row[headerMap.adSet]) || '').trim();
-    const adGroupId = String((headerMap.adGroupId && row[headerMap.adGroupId]) || '').trim();
-    const adName = String((headerMap.adName && row[headerMap.adName]) || '').trim();
-    const adId = String((headerMap.adId && row[headerMap.adId]) || '').trim();
+    const campaignType = cleanDimensionText(headerMap.campaignType && row[headerMap.campaignType]);
+    const adSetName = cleanDimensionText(headerMap.adSet && row[headerMap.adSet]);
+    const adGroupId = cleanDimensionText(headerMap.adGroupId && row[headerMap.adGroupId]);
+    const adName = cleanDimensionText(headerMap.adName && row[headerMap.adName]);
+    const adId = cleanDimensionText(headerMap.adId && row[headerMap.adId]);
 
-    if (isSummaryOrTotalRow([rawPlatform, campaignName, adSetName, adName, String(row[headerMap.date] || '')])) {
+    const rawDateCell = cleanDimensionText(headerMap.date && row[headerMap.date]);
+    const rawStartCell = cleanDimensionText(headerMap.startDate && row[headerMap.startDate]);
+
+    // Filter out Total / Grand Total / "Total of 25 results" rows across ALL columns
+    if (
+      isSummaryOrTotalRow(rawValues, [
+        rawPlatform,
+        campaignName,
+        adSetName,
+        adName,
+        rawDateCell,
+        rawStartCell,
+      ])
+    ) {
       skippedSummaryRows += 1;
       return;
     }
@@ -746,17 +752,17 @@ export function parseCampaignCSV(
       return;
     }
 
-    const rawStartDate = String(
+    const rawStartDate = cleanDimensionText(
       (headerMap.startDate && row[headerMap.startDate]) || row['التاريخ من'] || row['Start Date'] || ''
-    ).trim();
+    );
 
-    const rawEndDate = String(
+    const rawEndDate = cleanDimensionText(
       (headerMap.endDate && row[headerMap.endDate]) || row['التاريخ إلى'] || row['End Date'] || ''
-    ).trim();
+    );
 
-    const rawSingleDate = String(
+    const rawSingleDate = cleanDimensionText(
       (headerMap.date && row[headerMap.date]) || row['Date'] || row['التاريخ'] || ''
-    ).trim();
+    );
 
     let parsedRangeStart = '';
     let parsedRangeEnd = '';
@@ -892,9 +898,6 @@ export function parseCampaignCSV(
   };
 }
 
-/**
- * Calculates aggregated key performance indicators for a list of campaigns.
- */
 export function calculateAggregatedMetrics(campaigns: CampaignData[]): AggregatedMetrics {
   if (!campaigns || campaigns.length === 0) {
     return {
@@ -994,8 +997,10 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
 }
 
 /**
- * Aggregates campaign rows into 3 clean hierarchy levels:
- * 1) Campaigns  2) Ad Groups (Ad Sets)  3) Individual Ads
+ * Aggregates campaign rows cleanly by unique ID + Name at each of the 3 levels:
+ * 1) Campaign (by campaignName)
+ * 2) Ad Group (by adGroupId || adSetName)
+ * 3) Ad (by adId || adName)
  */
 export function buildHierarchyDrilldown(
   campaigns: CampaignData[],
@@ -1008,11 +1013,11 @@ export function buildHierarchyDrilldown(
     if (level === 'campaign') {
       key = `${c.platform}::${c.campaignName}`;
     } else if (level === 'adGroup') {
-      const groupName = c.adSetName || '(بدون مجموعة إعلانية محددة)';
-      key = `${c.platform}::${c.campaignName}::${c.adGroupId || groupName}`;
+      const groupIdentity = c.adGroupId || c.adSetName || '(بدون مجموعة إعلانية)';
+      key = `${c.platform}::${groupIdentity}`;
     } else {
-      const adLabel = c.adName || c.campaignName;
-      key = `${c.platform}::${c.campaignName}::${c.adSetName || ''}::${c.adId || adLabel}`;
+      const adIdentity = c.adId || c.adName || c.campaignName;
+      key = `${c.platform}::${adIdentity}`;
     }
 
     if (!groups.has(key)) groups.set(key, []);
@@ -1038,8 +1043,8 @@ export function buildHierarchyDrilldown(
       level === 'campaign'
         ? first.campaignName
         : level === 'adGroup'
-        ? first.adSetName || first.campaignName
-        : first.adName || first.campaignName;
+        ? first.adSetName || first.adGroupId || first.campaignName
+        : first.adName || first.adId || first.campaignName;
 
     const entityId =
       level === 'adGroup'
@@ -1086,9 +1091,6 @@ export function buildHierarchyDrilldown(
   return rows;
 }
 
-/**
- * Groups campaigns by platform and generates comparative analytics.
- */
 export function calculatePlatformBreakdown(campaigns: CampaignData[]): PlatformMetrics[] {
   const overall = calculateAggregatedMetrics(campaigns);
   const platforms: AdPlatform[] = ['snapchat', 'tiktok', 'meta', 'google', 'other'];
@@ -1133,9 +1135,6 @@ function enumerateIsoDays(startIso: string, endIso: string, maxDays = 90): strin
   return days;
 }
 
-/**
- * Builds a chronological Day-by-Day breakdown from campaigns.
- */
 export function calculateDailyBreakdown(campaigns: CampaignData[]): {
   days: DailyBreakdownItem[];
   summary: DailyIntelligenceSummary;
@@ -1360,15 +1359,11 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
   };
 }
 
-/**
- * Aggregates metrics across days at the individual Ad / Ad Set / Campaign level
- * and detects ad-level creative fatigue.
- */
 export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem[] {
   const groups = new Map<string, CampaignData[]>();
 
   for (const c of campaigns) {
-    const key = `${c.platform}::${c.campaignName}::${c.adSetName || ''}::${c.adId || c.adName || ''}`;
+    const key = `${c.platform}::${c.adId || c.adName || c.campaignName}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(c);
   }
@@ -1428,9 +1423,6 @@ export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem
   return items.sort((a, b) => b.spend - a.spend);
 }
 
-/**
- * Categorizes campaign performance based on ROAS and CPA benchmark.
- */
 export function getPerformanceTier(roas: number, cpa: number, avgCpa: number): {
   tier: PerformanceTier;
   labelAr: string;
