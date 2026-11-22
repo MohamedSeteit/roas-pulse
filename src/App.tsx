@@ -63,7 +63,23 @@ function resolveLegalRoute(pathname: string): LegalPageRoute | null {
   return null;
 }
 
-/** Normalize any date string (including Snapchat AST timestamps) to YYYY-MM-DD */
+const MONTH_ABBR: Record<string, string> = {
+  jan: '01',
+  feb: '02',
+  mar: '03',
+  apr: '04',
+  may: '05',
+  jun: '06',
+  jul: '07',
+  aug: '08',
+  sep: '09',
+  sept: '09',
+  oct: '10',
+  nov: '11',
+  dec: '12',
+};
+
+/** Normalize any date string (including Snapchat AST timestamps & DD-MMM-YY labels) to YYYY-MM-DD */
 function cleanIsoDate(raw?: string): string {
   if (!raw) return '';
   const str = String(raw)
@@ -72,45 +88,99 @@ function cleanIsoDate(raw?: string): string {
     .trim();
   if (!str || /^(ongoing|none|null|n\/a|-)$/i.test(str)) return '';
 
-  const isoPrefix = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  // Handle period strings like "2026-10-01 إلى 2026-10-31" -> extract first date
+  const firstPart = str.split(/\s+(?:إلى|to|–|—)\s+/i)[0]?.trim() || str;
+
+  const isoPrefix = firstPart.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (isoPrefix) {
     return `${isoPrefix[1]}-${isoPrefix[2].padStart(2, '0')}-${isoPrefix[3].padStart(2, '0')}`;
   }
 
-  const slashMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  const slashMatch = firstPart.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
   if (slashMatch) {
     const p1 = Number(slashMatch[1]);
     const p2 = Number(slashMatch[2]);
-    const year = slashMatch[3];
+    const rawYear = slashMatch[3];
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
     const month = p1 > 12 ? p2 : p1;
     const day = p1 > 12 ? p1 : p2;
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
   }
 
-  const parsed = new Date(str);
+  const textMonthMatch = firstPart.match(/(\d{1,2})[\s-]*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[\s-]*(\d{2,4})/i);
+  if (textMonthMatch) {
+    const day = textMonthMatch[1].padStart(2, '0');
+    const month = MONTH_ABBR[textMonthMatch[2].toLowerCase()];
+    const rawYear = textMonthMatch[3];
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+    if (month) return `${year}-${month}-${day}`;
+  }
+
+  const parsed = new Date(firstPart);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
+    const y = parsed.getFullYear();
+    if (y >= 2000 && y <= 2100) {
+      return parsed.toISOString().slice(0, 10);
+    }
   }
   return '';
 }
 
-/** Sanitize campaign rows: remove summary/Total rows and fix exact day dates */
+/** Extract date embedded inside ad/campaign name if date column defaulted to today */
+function extractDateFromLabel(label?: string): string {
+  if (!label) return '';
+  // e.g. "28-10-26" or "03-10-2026"
+  const numMatch = label.match(/(?:^|[\s/_-])(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:$|[\s/_-])/);
+  if (numMatch) {
+    const d = Number(numMatch[1]);
+    const m = Number(numMatch[2]);
+    const y = numMatch[3].length === 2 ? `20${numMatch[3]}` : numMatch[3];
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+  // e.g. "16Nov26" or "28 Oct 26"
+  const alphaMatch = label.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s*(\d{2,4})/i);
+  if (alphaMatch) {
+    const d = alphaMatch[1].padStart(2, '0');
+    const m = MONTH_ABBR[alphaMatch[2].toLowerCase()];
+    const y = alphaMatch[3].length === 2 ? `20${alphaMatch[3]}` : alphaMatch[3];
+    if (m) return `${y}-${m}-${d}`;
+  }
+  return '';
+}
+
+/** Sanitize campaign rows: remove summary/Total rows and resolve exact day dates */
 function sanitizeCampaignRows(rows: CampaignData[]): CampaignData[] {
+  const todayStr = new Date().toISOString().slice(0, 10);
   return rows
     .filter((row) => {
-      const name = String(row.name || '').trim();
-      if (!name) return false;
-      if (/^total(\s+of|\s|$)/i.test(name)) return false;
+      const label = String(row.campaignName || (row as any).name || row.adName || '').trim();
+      if (!label) return false;
+      if (/^(total|المجموع|الإجمالي)(\s+of|\s|$)/i.test(label)) return false;
       return true;
     })
     .map((row) => {
-      // Prioritize exact daily date (`date`) over campaign launch date (`startDate`)
-      const exactDay =
+      const campaignName = String(row.campaignName || (row as any).name || 'حملة بدون اسم').trim();
+      let exactDay =
         cleanIsoDate(row.date) ||
         cleanIsoDate(row.startDate) ||
         cleanIsoDate(row.endDate);
 
-      const cleanStart = exactDay || cleanIsoDate(row.startDate);
+      // If parser fell back to today's date because date column wasn't mapped, try extracting date from ad/adSet/campaign name
+      if (!exactDay || exactDay === todayStr) {
+        const fromNames =
+          extractDateFromLabel(row.adName) ||
+          extractDateFromLabel(row.adSetName) ||
+          extractDateFromLabel(campaignName);
+        if (fromNames) {
+          exactDay = fromNames;
+        }
+      }
+
+      const cleanStart = exactDay || cleanIsoDate(row.startDate) || todayStr;
       const cleanEnd =
         row.platform === 'snapchat'
           ? cleanStart
@@ -118,9 +188,10 @@ function sanitizeCampaignRows(rows: CampaignData[]): CampaignData[] {
 
       return {
         ...row,
-        date: cleanStart || row.date,
-        startDate: cleanStart || row.startDate,
-        endDate: cleanEnd || row.endDate,
+        campaignName,
+        date: cleanStart,
+        startDate: cleanStart,
+        endDate: cleanEnd,
       };
     });
 }
@@ -229,7 +300,7 @@ export default function App() {
     setStatusToast({ text, tone });
     setTimeout(() => {
       setStatusToast((curr) => (curr?.text === text ? null : curr));
-    }, 5500);
+    }, 6500);
   }, []);
 
   const authHeaders = useMemo<Record<string, string>>(() => {
@@ -654,9 +725,15 @@ export default function App() {
       setIsSavingMonth(true);
       try {
         const cleanIncoming = sanitizeCampaignRows(targetCampaigns);
+        if (cleanIncoming.length === 0) {
+          showToast('لم يتم العثور على صفوف صالحة للحفظ.', 'error');
+          return;
+        }
+
         const groupedByMonth = groupCampaignsByMonthKey(cleanIncoming, activeMonthKey);
         const monthKeys = Object.keys(groupedByMonth).sort();
         let latestUpdatedClient: ClientProfile | null = null;
+        let failedError = '';
 
         for (const mKey of monthKeys) {
           const incomingRows = groupedByMonth[mKey];
@@ -690,13 +767,15 @@ export default function App() {
               }),
             }
           );
-          const data = await res.json();
+          const data = await res.json().catch(() => ({}));
           if (res.status === 402) {
             setAuthModalState({ open: true, tab: 'billing' });
             return;
           }
           if (res.ok && data.client) {
             latestUpdatedClient = data.client;
+          } else {
+            failedError = data.error || `فشل الحفظ (${res.status})`;
           }
         }
 
@@ -718,9 +797,13 @@ export default function App() {
 
           const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
           showToast(
-            `تم تقسيم وحفظ البيانات تلقائياً في ${monthKeys.length} شهور (${labels}) مع الحفاظ على باقي المنصات.`
+            `تم تقسيم وحفظ ${cleanIncoming.length} سجل تلقائياً في ${monthKeys.length} شهور (${labels}).`
           );
+        } else if (failedError) {
+          showToast(`تعذر الحفظ على الخادم: ${failedError}`, 'error');
         }
+      } catch (err: any) {
+        showToast(`خطأ أثناء الحفظ: ${err?.message || 'غير معروف'}`, 'error');
       } finally {
         setIsSavingMonth(false);
       }
@@ -906,6 +989,11 @@ export default function App() {
   const handleImportData = useCallback(
     (newCampaigns: CampaignData[], mode: 'replace' | 'merge' = 'replace') => {
       const cleanedIncoming = sanitizeCampaignRows(newCampaigns);
+      if (cleanedIncoming.length === 0) {
+        showToast('لم يتم العثور على صفوف حملات صالحة للاستيراد.', 'error');
+        return;
+      }
+
       const groupedByMonth = groupCampaignsByMonthKey(cleanedIncoming, activeMonthKey);
       const detectedMonths = Object.keys(groupedByMonth).sort();
       const latestMonth =
@@ -942,6 +1030,8 @@ export default function App() {
         if (detectedMonths.length > 1) {
           const labels = detectedMonths.map((m) => formatMonthLabelAr(m)).join('، ');
           showToast(`تم تقسيم البيانات إلى ${detectedMonths.length} شهور (${labels}).`);
+        } else {
+          showToast(`تم استيراد ${cleanedIncoming.length} سجل بنجاح.`);
         }
       }
     },
