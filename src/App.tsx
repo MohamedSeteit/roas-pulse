@@ -36,7 +36,6 @@ import {
   calculateDailyBreakdown,
   calculateAdBreakdown,
   generateSampleCSVString,
-  normalizeDate,
 } from './utils/adMetrics';
 import {
   DEFAULT_REPORT_SETTINGS,
@@ -64,12 +63,74 @@ function resolveLegalRoute(pathname: string): LegalPageRoute | null {
   return null;
 }
 
+/** Normalize any date string (including Snapchat AST timestamps) to YYYY-MM-DD */
+function cleanIsoDate(raw?: string): string {
+  if (!raw) return '';
+  const str = String(raw)
+    .trim()
+    .replace(/\s+(AST|UTC|GMT|[A-Z]{2,4})$/i, '')
+    .trim();
+  if (!str || /^(ongoing|none|null|n\/a|-)$/i.test(str)) return '';
+
+  const isoPrefix = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoPrefix) {
+    return `${isoPrefix[1]}-${isoPrefix[2].padStart(2, '0')}-${isoPrefix[3].padStart(2, '0')}`;
+  }
+
+  const slashMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (slashMatch) {
+    const p1 = Number(slashMatch[1]);
+    const p2 = Number(slashMatch[2]);
+    const year = slashMatch[3];
+    const month = p1 > 12 ? p2 : p1;
+    const day = p1 > 12 ? p1 : p2;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(str);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+/** Sanitize campaign rows: remove summary/Total rows and fix exact day dates */
+function sanitizeCampaignRows(rows: CampaignData[]): CampaignData[] {
+  return rows
+    .filter((row) => {
+      const name = String(row.name || '').trim();
+      if (!name) return false;
+      if (/^total(\s+of|\s|$)/i.test(name)) return false;
+      return true;
+    })
+    .map((row) => {
+      // Prioritize exact daily date (`date`) over campaign launch date (`startDate`)
+      const exactDay =
+        cleanIsoDate(row.date) ||
+        cleanIsoDate(row.startDate) ||
+        cleanIsoDate(row.endDate);
+
+      const cleanStart = exactDay || cleanIsoDate(row.startDate);
+      const cleanEnd =
+        row.platform === 'snapchat'
+          ? cleanStart
+          : cleanIsoDate(row.endDate) || cleanStart;
+
+      return {
+        ...row,
+        date: cleanStart || row.date,
+        startDate: cleanStart || row.startDate,
+        endDate: cleanEnd || row.endDate,
+      };
+    });
+}
+
 /** Extract YYYY-MM reliably from any date format */
 function extractMonthKeyFromRow(row: CampaignData, fallbackMonthKey: string): string {
-  const candidates = [row.startDate, row.endDate, row.date];
+  const candidates = [row.date, row.startDate, row.endDate];
   for (const raw of candidates) {
     if (!raw) continue;
-    const normalized = normalizeDate(raw);
+    const normalized = cleanIsoDate(raw);
     const isoMatch = normalized.match(/^(\d{4}-\d{2})/);
     if (isoMatch) return isoMatch[1];
 
@@ -81,7 +142,7 @@ function extractMonthKeyFromRow(row: CampaignData, fallbackMonthKey: string): st
   return fallbackMonthKey;
 }
 
-/** Group campaigns automatically by YYYY-MM based on their dates */
+/** Group campaigns automatically by YYYY-MM based on their exact day dates */
 function groupCampaignsByMonthKey(
   rows: CampaignData[],
   fallbackMonthKey: string
@@ -202,7 +263,10 @@ export default function App() {
   const syncDatesFromCampaigns = useCallback((rows: CampaignData[]) => {
     const agg = calculateAggregatedMetrics(rows);
     if (agg.startDate && agg.endDate) {
-      setDateRange({ start: agg.startDate, end: agg.endDate });
+      setDateRange({
+        start: cleanIsoDate(agg.startDate) || agg.startDate,
+        end: cleanIsoDate(agg.endDate) || agg.endDate,
+      });
     } else {
       setDateRange({ start: '', end: '' });
     }
@@ -241,9 +305,10 @@ export default function App() {
       setSelectedMonthKeys([targetMonth]);
       const snapshot = client.months?.[targetMonth];
       if (snapshot) {
-        setCampaigns(snapshot.campaigns || []);
+        const cleanRows = sanitizeCampaignRows(snapshot.campaigns || []);
+        setCampaigns(cleanRows);
         setAiAnalysis(snapshot.aiAnalysis || null);
-        syncDatesFromCampaigns(snapshot.campaigns || []);
+        syncDatesFromCampaigns(cleanRows);
       } else {
         setCampaigns([]);
         setAiAnalysis(null);
@@ -299,8 +364,10 @@ export default function App() {
   const availableDates = useMemo(() => {
     const dates = new Set<string>();
     campaigns.forEach((c) => {
-      if (c.startDate) dates.add(c.startDate);
-      if (c.endDate) dates.add(c.endDate);
+      const s = cleanIsoDate(c.startDate || c.date);
+      const e = cleanIsoDate(c.endDate || c.date);
+      if (s) dates.add(s);
+      if (e) dates.add(e);
     });
     return Array.from(dates).sort();
   }, [campaigns]);
@@ -310,8 +377,8 @@ export default function App() {
       if (selectedPlatform !== 'all' && c.platform !== selectedPlatform) {
         return false;
       }
-      const campStart = c.startDate || c.date;
-      const campEnd = c.endDate || c.date;
+      const campStart = cleanIsoDate(c.startDate || c.date);
+      const campEnd = cleanIsoDate(c.endDate || c.date);
 
       if (dateRange.start && campEnd && campEnd < dateRange.start) {
         return false;
@@ -509,9 +576,10 @@ export default function App() {
     setSelectedMonthKeys([monthKey]);
     if (activeClient?.months?.[monthKey]) {
       const snap = activeClient.months[monthKey];
-      setCampaigns(snap.campaigns || []);
+      const cleanRows = sanitizeCampaignRows(snap.campaigns || []);
+      setCampaigns(cleanRows);
       setAiAnalysis(snap.aiAnalysis || null);
-      syncDatesFromCampaigns(snap.campaigns || []);
+      syncDatesFromCampaigns(cleanRows);
       setHasUnsavedChanges(false);
     } else {
       setCampaigns([]);
@@ -536,7 +604,7 @@ export default function App() {
       for (const mk of sorted) {
         const snap = activeClient.months[mk];
         if (snap?.campaigns) {
-          combinedCampaigns.push(...snap.campaigns);
+          combinedCampaigns.push(...sanitizeCampaignRows(snap.campaigns));
         }
       }
       setSelectedMonthKeys(sorted);
@@ -573,30 +641,39 @@ export default function App() {
     [selectedMonthKeys, loadGroupedMonths, showToast]
   );
 
-  // Auto-split multi-month campaigns by YYYY-MM and save each month snapshot separately
+  // Auto-split multi-month campaigns by YYYY-MM and merge cleanly per platform inside each month
   const persistMonthToServer = useCallback(
     async (
       targetCampaigns: CampaignData[],
       targetAnalysis: AIAnalysisResult | null,
-      options: { mergeWithExisting?: boolean; forceEvenIfAggregated?: boolean } = {}
+      options: { replacePlatformsInMonth?: boolean; forceEvenIfAggregated?: boolean } = {}
     ) => {
       if (!user || !activeClient || targetCampaigns.length === 0) return;
       if (isAggregatedView && !options.forceEvenIfAggregated) return;
 
       setIsSavingMonth(true);
       try {
-        const groupedByMonth = groupCampaignsByMonthKey(targetCampaigns, activeMonthKey);
+        const cleanIncoming = sanitizeCampaignRows(targetCampaigns);
+        const groupedByMonth = groupCampaignsByMonthKey(cleanIncoming, activeMonthKey);
         const monthKeys = Object.keys(groupedByMonth).sort();
         let latestUpdatedClient: ClientProfile | null = null;
 
         for (const mKey of monthKeys) {
-          const monthRows = groupedByMonth[mKey];
-          const existingRows = activeClient.months?.[mKey]?.campaigns || [];
-          const shouldMerge =
-            options.mergeWithExisting || (existingRows.length > 0 && monthKeys.length > 1);
-          const finalRows = shouldMerge
-            ? [...existingRows, ...monthRows]
-            : monthRows;
+          const incomingRows = groupedByMonth[mKey];
+          const existingRows = sanitizeCampaignRows(
+            activeClient.months?.[mKey]?.campaigns || []
+          );
+
+          // Keep other platforms in the same month intact while updating uploaded platform(s)
+          const incomingPlatforms = new Set(incomingRows.map((r) => r.platform));
+          const keptOtherPlatforms = options.replacePlatformsInMonth
+            ? existingRows.filter((r) => !incomingPlatforms.has(r.platform))
+            : existingRows;
+
+          const finalRows =
+            options.replacePlatformsInMonth || existingRows.length > 0
+              ? [...keptOtherPlatforms, ...incomingRows]
+              : incomingRows;
 
           const res = await fetch(
             `/api/clients/${activeClient.id}/months/${mKey}`,
@@ -631,25 +708,32 @@ export default function App() {
           const lastSavedMonth = monthKeys[monthKeys.length - 1];
           const activeSnapshot = finalClient.months?.[lastSavedMonth];
           if (activeSnapshot) {
-            setCampaigns(activeSnapshot.campaigns || []);
-            syncDatesFromCampaigns(activeSnapshot.campaigns || []);
+            const cleanSnapRows = sanitizeCampaignRows(activeSnapshot.campaigns || []);
+            setCampaigns(cleanSnapRows);
+            syncDatesFromCampaigns(cleanSnapRows);
           }
           setActiveMonthKey(lastSavedMonth);
           setSelectedMonthKeys([lastSavedMonth]);
           setHasUnsavedChanges(false);
 
-          if (monthKeys.length > 1) {
-            const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
-            showToast(`تم تقسيم وحفظ البيانات تلقائياً في ${monthKeys.length} شهور منفصلة (${labels}).`);
-          } else {
-            showToast(`تم تقسيم وحفظ بيانات ${formatMonthLabelAr(lastSavedMonth)} تلقائياً.`);
-          }
+          const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
+          showToast(
+            `تم تقسيم وحفظ البيانات تلقائياً في ${monthKeys.length} شهور (${labels}) مع الحفاظ على باقي المنصات.`
+          );
         }
       } finally {
         setIsSavingMonth(false);
       }
     },
-    [user, activeClient, activeMonthKey, isAggregatedView, authHeaders, syncDatesFromCampaigns, showToast]
+    [
+      user,
+      activeClient,
+      activeMonthKey,
+      isAggregatedView,
+      authHeaders,
+      syncDatesFromCampaigns,
+      showToast,
+    ]
   );
 
   const handleSaveReportSettings = async (
@@ -821,14 +905,24 @@ export default function App() {
 
   const handleImportData = useCallback(
     (newCampaigns: CampaignData[], mode: 'replace' | 'merge' = 'replace') => {
-      const groupedByMonth = groupCampaignsByMonthKey(newCampaigns, activeMonthKey);
+      const cleanedIncoming = sanitizeCampaignRows(newCampaigns);
+      const groupedByMonth = groupCampaignsByMonthKey(cleanedIncoming, activeMonthKey);
       const detectedMonths = Object.keys(groupedByMonth).sort();
       const latestMonth =
         detectedMonths.length > 0 ? detectedMonths[detectedMonths.length - 1] : activeMonthKey;
 
-      const latestMonthRows = groupedByMonth[latestMonth] || newCampaigns;
+      const latestMonthRows = groupedByMonth[latestMonth] || cleanedIncoming;
+      const incomingPlatforms = new Set(latestMonthRows.map((r) => r.platform));
+      const keptCurrentOtherPlatforms = campaigns.filter(
+        (r) =>
+          !incomingPlatforms.has(r.platform) &&
+          (cleanIsoDate(r.date || r.startDate) || '').startsWith(latestMonth)
+      );
+
       const nextDisplayDataset =
-        mode === 'merge' ? [...campaigns, ...latestMonthRows] : latestMonthRows;
+        mode === 'merge'
+          ? [...campaigns, ...latestMonthRows]
+          : [...keptCurrentOtherPlatforms, ...latestMonthRows];
 
       setCampaigns(nextDisplayDataset);
       setSelectedPlatform('all');
@@ -839,8 +933,8 @@ export default function App() {
 
       // Automatically split & persist each month separately to the active client on server
       if (user && activeClient) {
-        void persistMonthToServer(newCampaigns, null, {
-          mergeWithExisting: mode === 'merge',
+        void persistMonthToServer(cleanedIncoming, null, {
+          replacePlatformsInMonth: mode === 'replace',
           forceEvenIfAggregated: true,
         });
       } else {
