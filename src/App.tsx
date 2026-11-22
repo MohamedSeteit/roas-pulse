@@ -36,6 +36,7 @@ import {
   calculateDailyBreakdown,
   calculateAdBreakdown,
   generateSampleCSVString,
+  normalizeDate,
 } from './utils/adMetrics';
 import {
   DEFAULT_REPORT_SETTINGS,
@@ -63,16 +64,31 @@ function resolveLegalRoute(pathname: string): LegalPageRoute | null {
   return null;
 }
 
-/** Group campaigns automatically by YYYY-MM based on their startDate/date */
+/** Extract YYYY-MM reliably from any date format */
+function extractMonthKeyFromRow(row: CampaignData, fallbackMonthKey: string): string {
+  const candidates = [row.startDate, row.endDate, row.date];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const normalized = normalizeDate(raw);
+    const isoMatch = normalized.match(/^(\d{4}-\d{2})/);
+    if (isoMatch) return isoMatch[1];
+
+    const anyYearMonth = String(raw).match(/(\d{4})[-/.](\d{1,2})/);
+    if (anyYearMonth) {
+      return `${anyYearMonth[1]}-${anyYearMonth[2].padStart(2, '0')}`;
+    }
+  }
+  return fallbackMonthKey;
+}
+
+/** Group campaigns automatically by YYYY-MM based on their dates */
 function groupCampaignsByMonthKey(
   rows: CampaignData[],
   fallbackMonthKey: string
 ): Record<string, CampaignData[]> {
   const groups: Record<string, CampaignData[]> = {};
   for (const row of rows) {
-    const rawDate = row.startDate || row.endDate || row.date || '';
-    const match = rawDate.match(/^(\d{4}-\d{2})/);
-    const key = match ? match[1] : fallbackMonthKey;
+    const key = extractMonthKeyFromRow(row, fallbackMonthKey);
     if (!groups[key]) {
       groups[key] = [];
     }
@@ -561,9 +577,12 @@ export default function App() {
   const persistMonthToServer = useCallback(
     async (
       targetCampaigns: CampaignData[],
-      targetAnalysis: AIAnalysisResult | null
+      targetAnalysis: AIAnalysisResult | null,
+      options: { mergeWithExisting?: boolean; forceEvenIfAggregated?: boolean } = {}
     ) => {
-      if (!user || !activeClient || targetCampaigns.length === 0 || isAggregatedView) return;
+      if (!user || !activeClient || targetCampaigns.length === 0) return;
+      if (isAggregatedView && !options.forceEvenIfAggregated) return;
+
       setIsSavingMonth(true);
       try {
         const groupedByMonth = groupCampaignsByMonthKey(targetCampaigns, activeMonthKey);
@@ -573,10 +592,11 @@ export default function App() {
         for (const mKey of monthKeys) {
           const monthRows = groupedByMonth[mKey];
           const existingRows = activeClient.months?.[mKey]?.campaigns || [];
-          const mergedRows =
-            existingRows.length > 0 && monthKeys.length > 1
-              ? [...existingRows, ...monthRows]
-              : monthRows;
+          const shouldMerge =
+            options.mergeWithExisting || (existingRows.length > 0 && monthKeys.length > 1);
+          const finalRows = shouldMerge
+            ? [...existingRows, ...monthRows]
+            : monthRows;
 
           const res = await fetch(
             `/api/clients/${activeClient.id}/months/${mKey}`,
@@ -584,9 +604,12 @@ export default function App() {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json', ...authHeaders },
               body: JSON.stringify({
-                campaigns: mergedRows,
+                campaigns: finalRows,
                 label: formatMonthLabelAr(mKey),
-                aiAnalysis: mKey === monthKeys[monthKeys.length - 1] ? targetAnalysis : null,
+                aiAnalysis:
+                  mKey === monthKeys[monthKeys.length - 1]
+                    ? targetAnalysis
+                    : activeClient.months?.[mKey]?.aiAnalysis || null,
               }),
             }
           );
@@ -606,6 +629,11 @@ export default function App() {
             prev.map((c) => (c.id === finalClient.id ? finalClient : c))
           );
           const lastSavedMonth = monthKeys[monthKeys.length - 1];
+          const activeSnapshot = finalClient.months?.[lastSavedMonth];
+          if (activeSnapshot) {
+            setCampaigns(activeSnapshot.campaigns || []);
+            syncDatesFromCampaigns(activeSnapshot.campaigns || []);
+          }
           setActiveMonthKey(lastSavedMonth);
           setSelectedMonthKeys([lastSavedMonth]);
           setHasUnsavedChanges(false);
@@ -614,14 +642,14 @@ export default function App() {
             const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
             showToast(`تم تقسيم وحفظ البيانات تلقائياً في ${monthKeys.length} شهور منفصلة (${labels}).`);
           } else {
-            showToast(`تم حفظ بيانات ${formatMonthLabelAr(lastSavedMonth)} للعميل بنجاح.`);
+            showToast(`تم تقسيم وحفظ بيانات ${formatMonthLabelAr(lastSavedMonth)} تلقائياً.`);
           }
         }
       } finally {
         setIsSavingMonth(false);
       }
     },
-    [user, activeClient, activeMonthKey, isAggregatedView, authHeaders, showToast]
+    [user, activeClient, activeMonthKey, isAggregatedView, authHeaders, syncDatesFromCampaigns, showToast]
   );
 
   const handleSaveReportSettings = async (
@@ -793,28 +821,45 @@ export default function App() {
 
   const handleImportData = useCallback(
     (newCampaigns: CampaignData[], mode: 'replace' | 'merge' = 'replace') => {
-      const nextDataset = mode === 'merge' ? [...campaigns, ...newCampaigns] : newCampaigns;
-      setCampaigns(nextDataset);
-      setSelectedPlatform('all');
-      syncDatesFromCampaigns(nextDataset);
-      setAiAnalysis(null);
-      setHasUnsavedChanges(true);
+      const groupedByMonth = groupCampaignsByMonthKey(newCampaigns, activeMonthKey);
+      const detectedMonths = Object.keys(groupedByMonth).sort();
+      const latestMonth =
+        detectedMonths.length > 0 ? detectedMonths[detectedMonths.length - 1] : activeMonthKey;
 
-      const detectedMonths = Object.keys(
-        groupCampaignsByMonthKey(nextDataset, activeMonthKey)
-      ).sort();
-      if (detectedMonths.length > 1) {
-        const labels = detectedMonths.map((m) => formatMonthLabelAr(m)).join('، ');
-        setSelectedMonthKeys([detectedMonths[detectedMonths.length - 1]]);
-        showToast(
-          `تم اكتشاف بيانات لـ ${detectedMonths.length} شهور (${labels}). اضغط "حفظ بيانات الشهر" لتقسيمهم وحفظ كل شهر في ملفه تلقائياً.`
-        );
-      } else if (detectedMonths.length === 1) {
-        setActiveMonthKey(detectedMonths[0]);
-        setSelectedMonthKeys([detectedMonths[0]]);
+      const latestMonthRows = groupedByMonth[latestMonth] || newCampaigns;
+      const nextDisplayDataset =
+        mode === 'merge' ? [...campaigns, ...latestMonthRows] : latestMonthRows;
+
+      setCampaigns(nextDisplayDataset);
+      setSelectedPlatform('all');
+      syncDatesFromCampaigns(nextDisplayDataset);
+      setAiAnalysis(null);
+      setActiveMonthKey(latestMonth);
+      setSelectedMonthKeys([latestMonth]);
+
+      // Automatically split & persist each month separately to the active client on server
+      if (user && activeClient) {
+        void persistMonthToServer(newCampaigns, null, {
+          mergeWithExisting: mode === 'merge',
+          forceEvenIfAggregated: true,
+        });
+      } else {
+        setHasUnsavedChanges(true);
+        if (detectedMonths.length > 1) {
+          const labels = detectedMonths.map((m) => formatMonthLabelAr(m)).join('، ');
+          showToast(`تم تقسيم البيانات إلى ${detectedMonths.length} شهور (${labels}).`);
+        }
       }
     },
-    [campaigns, syncDatesFromCampaigns, activeMonthKey, showToast]
+    [
+      campaigns,
+      syncDatesFromCampaigns,
+      activeMonthKey,
+      user,
+      activeClient,
+      persistMonthToServer,
+      showToast,
+    ]
   );
 
   const handleLoadDemo = useCallback(() => {
