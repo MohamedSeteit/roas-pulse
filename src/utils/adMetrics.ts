@@ -7,6 +7,7 @@ import type {
   DailyBreakdownItem,
   DailyIntelligenceSummary,
   AdBreakdownItem,
+  HierarchyDrilldownRow,
   ReportParseMeta,
   AIAnalysisResult,
 } from '../types/campaign.ts';
@@ -39,16 +40,9 @@ export function parseNumber(val: unknown): number {
     return 0;
   }
 
-  // Convert Arabic-Indic numerals (٠١٢٣٤٥٦٧٨٩) to standard (0-9)
   let str = rawTrimmed.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632));
-
-  // Replace Arabic comma '،' with standard comma
   str = str.replace(/،/g, ',');
-
-  // Strip thousand-separator commas
   str = str.replace(/,/g, '');
-
-  // Strip anything that is not digit, minus, or period
   str = str.replace(/[^0-9.-]/g, '').trim();
 
   const num = parseFloat(str);
@@ -71,45 +65,38 @@ const MONTH_MAP: Record<string, string> = {
 };
 
 /**
- * Normalizes date formats (YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, DD-MM-YYYY, timestamps, "Oct 22, 2026")
- * to standard ISO YYYY-MM-DD.
+ * Normalizes date formats to standard ISO YYYY-MM-DD.
  */
 export function normalizeDate(raw: unknown): string {
   if (!raw) return '';
   let str = String(raw).trim();
   if (!str) return '';
 
-  // Strip time portion if ISO timestamp or "YYYY-MM-DD HH:mm:ss"
   const isoPrefix = str.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})[T\s].*$/);
   if (isoPrefix) {
     str = isoPrefix[1];
   }
 
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     return str;
   }
 
-  // YYYY-M-D or YYYY/M/D
   const ymdMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (ymdMatch) {
     return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY (or MM/DD/YYYY if second part > 12)
   const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (dmyMatch) {
     const p1 = parseInt(dmyMatch[1], 10);
     const p2 = parseInt(dmyMatch[2], 10);
     const year = dmyMatch[3];
-    // If p2 > 12, it's MM/DD/YYYY
     if (p2 > 12 && p1 <= 12) {
       return `${year}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`;
     }
     return `${year}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
   }
 
-  // "Oct 22, 2026" or "October 22, 2026"
   const mdyTextMatch = str.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
   if (mdyTextMatch) {
     const month = MONTH_MAP[mdyTextMatch[1].toLowerCase()];
@@ -118,7 +105,6 @@ export function normalizeDate(raw: unknown): string {
     }
   }
 
-  // "22 Oct 2026"
   const dmyTextMatch = str.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
   if (dmyTextMatch) {
     const month = MONTH_MAP[dmyTextMatch[2].toLowerCase()];
@@ -187,6 +173,9 @@ export function detectPlatformFromHeaders(headers: string[], fileName = ''): AdP
   if (
     joined.includes('complete payment') ||
     joined.includes('ad group name') ||
+    joined.includes('ad group id') ||
+    joined.includes('clicks (destination)') ||
+    joined.includes('purchases (website)') ||
     joined.includes('by day') ||
     joined.includes('stat time') ||
     joined.includes('skan') ||
@@ -251,12 +240,13 @@ export const PLATFORM_NAMES_EN: Record<AdPlatform, string> = {
 const HEADER_MATCH_KEYWORDS = [
   'campaign', 'حمله', 'الحمله',
   'adset', 'adgroup', 'adsquad', 'مجموعه',
-  'adname', 'اعلان', 'الاعلان',
+  'adname', 'adid', 'اعلان', 'الاعلان',
   'spend', 'cost', 'amountspent', 'مصروف', 'انفاق', 'تكلفه', 'منفق',
   'revenue', 'sales', 'conversionvalue', 'convvalue', 'completepaymentvalue', 'purchasevalue', 'مبيعات', 'ايرادات', 'قيمةالتحويل',
   'purchases', 'conversions', 'orders', 'completepayment', 'طلبات', 'مشتريات', 'تحويلات', 'احالات',
   'impressions', 'impr', 'paidimpressions', 'ظهور', 'انتشار',
   'clicks', 'swipeups', 'linkclicks', 'نقرات',
+  'pageviews', 'addstocart', 'checkoutsinitiated',
   'date', 'day', 'byday', 'reportingstarts', 'تاريخ', 'يوم',
   'منصه', 'platform', 'channel',
 ];
@@ -272,7 +262,7 @@ function isSummaryOrTotalRow(values: string[]): boolean {
 
 /**
  * Scans the first 12 rows of a raw CSV/TSV report to locate the true column header row
- * (skipping Google Ads / Snapchat / Meta title & date-range banner rows), and returns structured row objects.
+ * and returns structured row objects.
  */
 export function extractTableFromRawReport(rawText: string, forcedHeaderIndex?: number): {
   headers: string[];
@@ -288,7 +278,6 @@ export function extractTableFromRawReport(rawText: string, forcedHeaderIndex?: n
     return { headers: [], rows: [], headerRowIndex: 0, bannerText: '', errors: ['الملف فارغ.'] };
   }
 
-  // Detect delimiter cleanly (tab, semicolon, or comma)
   const sampleLines = cleanText.split(/\r?\n/).slice(0, 6).join('\n');
   const tabCount = (sampleLines.match(/\t/g) || []).length;
   const semiCount = (sampleLines.match(/;/g) || []).length;
@@ -337,7 +326,6 @@ export function extractTableFromRawReport(rawText: string, forcedHeaderIndex?: n
         headerRowIndex = i;
       }
     }
-    // If nothing scored >= 2, default to row 0
     if (bestScore < 2) {
       headerRowIndex = 0;
     }
@@ -354,7 +342,6 @@ export function extractTableFromRawReport(rawText: string, forcedHeaderIndex?: n
     return trimmed || `Column_${idx + 1}`;
   });
 
-  // Ensure unique header names
   const seen = new Map<string, number>();
   const headers = rawHeaderCells.map((h) => {
     const count = seen.get(h) || 0;
@@ -380,15 +367,35 @@ export interface ParseCampaignOptions {
   fileName?: string;
   forcedHeaderIndex?: number;
   customMapping?: Partial<Record<
-    'platform' | 'campaign' | 'adSet' | 'adName' | 'startDate' | 'endDate' | 'date' | 'spend' | 'revenue' | 'purchases' | 'impressions' | 'clicks' | 'addToCart' | 'roas' | 'reach' | 'frequency',
+    | 'platform'
+    | 'campaign'
+    | 'campaignType'
+    | 'adSet'
+    | 'adGroupId'
+    | 'adName'
+    | 'adId'
+    | 'startDate'
+    | 'endDate'
+    | 'date'
+    | 'spend'
+    | 'revenue'
+    | 'purchases'
+    | 'impressions'
+    | 'clicks'
+    | 'pageViews'
+    | 'addToCart'
+    | 'checkoutsInitiated'
+    | 'roas'
+    | 'reach'
+    | 'frequency',
     string
   >>;
 }
 
 /**
- * Parses raw CSV/TSV string (including native Snapchat, TikTok, Meta, and Google Ads exports)
- * into structured CampaignData with intelligent header matching, banner/total skipping,
- * platform auto-detection, forward-filling, and daily/ad-level extraction.
+ * Parses raw CSV/TSV string (including full-funnel TikTok, Snapchat, Meta, and Google Ads exports)
+ * into structured CampaignData with Campaign Type, Ad Group Name/ID, Ad Name/ID,
+ * and Full Funnel metrics (Page Views, Adds to Cart, Checkouts Initiated, Purchases).
  */
 export function parseCampaignCSV(
   csvString: string,
@@ -417,13 +424,13 @@ export function parseCampaignCSV(
         mappedColumns: [],
         rawHeaders,
         hasAdLevelDetails: false,
+        hasFunnelDetails: false,
       },
     };
   }
 
   const headerMap: Record<string, string> = {};
 
-  // Apply custom AI/user column mapping first if provided
   if (options.customMapping) {
     for (const [key, colName] of Object.entries(options.customMapping)) {
       if (colName && rawHeaders.includes(colName)) {
@@ -432,13 +439,14 @@ export function parseCampaignCSV(
     }
   }
 
+  // Pass 1: Specific & exact columns (IDs, Types, Funnel steps) before broad fallbacks
   for (const h of rawHeaders) {
     const norm = normalizeHeader(h);
 
-    // Skip cost-per / rate columns from accidentally matching spend/purchases/addToCart
-    const isRateOrRatio =
+    const isRateOrValuePerMetric =
       norm.includes('costper') ||
       norm.includes('cost/') ||
+      norm.includes('valueper') ||
       norm.includes('cpc') ||
       norm.includes('cpm') ||
       norm.includes('ctr') ||
@@ -456,10 +464,29 @@ export function parseCampaignCSV(
     ) {
       headerMap.platform = h;
     } else if (
+      !headerMap.campaignType &&
+      (norm === 'campaigntype' || norm === 'نوعالحمله' || norm.includes('campaigntype'))
+    ) {
+      headerMap.campaignType = h;
+    } else if (
+      !headerMap.adGroupId &&
+      (norm === 'adgroupid' || norm === 'adsetid' || norm === 'adsquadid' || norm.includes('معرفالمجموعه'))
+    ) {
+      headerMap.adGroupId = h;
+    } else if (
       !headerMap.adSet &&
-      (norm.includes('adset') || norm.includes('adgroup') || norm.includes('adsquad') || norm.includes('مجموعهاعلان') || norm.includes('مجموعه'))
+      (norm.includes('adset') ||
+        norm.includes('adgroup') ||
+        norm.includes('adsquad') ||
+        norm.includes('مجموعهاعلان') ||
+        norm.includes('مجموعه'))
     ) {
       headerMap.adSet = h;
+    } else if (
+      !headerMap.adId &&
+      (norm === 'adid' || norm === 'creativeid' || norm.includes('معرفالاعلان'))
+    ) {
+      headerMap.adId = h;
     } else if (
       !headerMap.adName &&
       (norm === 'ad' || norm === 'adname' || norm === 'الاعلان' || norm.includes('اسمالاعلان') || norm.includes('creative'))
@@ -467,6 +494,8 @@ export function parseCampaignCSV(
       headerMap.adName = h;
     } else if (
       !headerMap.campaign &&
+      !norm.includes('campaigntype') &&
+      !norm.includes('campaignid') &&
       (norm.includes('حمله') || norm.includes('الحمله') || norm.includes('campaign') || norm === 'اسم')
     ) {
       headerMap.campaign = h;
@@ -512,7 +541,7 @@ export function parseCampaignCSV(
       headerMap.roas = h;
     } else if (
       !headerMap.spend &&
-      !isRateOrRatio &&
+      !isRateOrValuePerMetric &&
       (norm.includes('مصروف') ||
         norm.includes('انفاق') ||
         norm.includes('منفق') ||
@@ -528,7 +557,10 @@ export function parseCampaignCSV(
       headerMap.spend = h;
     } else if (
       !headerMap.revenue &&
-      !isRateOrRatio &&
+      !isRateOrValuePerMetric &&
+      !norm.includes('pageview') &&
+      !norm.includes('addtocart') &&
+      !norm.includes('checkout') &&
       (norm.includes('مبيعات') ||
         norm.includes('ايرادات') ||
         norm.includes('دخل') ||
@@ -544,18 +576,39 @@ export function parseCampaignCSV(
     ) {
       headerMap.revenue = h;
     } else if (
+      !headerMap.pageViews &&
+      !isRateOrValuePerMetric &&
+      !norm.includes('value') &&
+      (norm.includes('pageview') || norm.includes('زياراتالصفحه') || norm.includes('مشاهداتالصفحه'))
+    ) {
+      headerMap.pageViews = h;
+    } else if (
+      !headerMap.addToCart &&
+      !isRateOrValuePerMetric &&
+      !norm.includes('value') &&
+      (norm.includes('سله') ||
+        norm.includes('اضافه') ||
+        norm.includes('addtocart') ||
+        norm.includes('addstocart') ||
+        norm.includes('addcart'))
+    ) {
+      headerMap.addToCart = h;
+    } else if (
+      !headerMap.checkoutsInitiated &&
+      !isRateOrValuePerMetric &&
+      !norm.includes('value') &&
+      (norm.includes('checkout') || norm.includes('بدءالدفع') || norm.includes('اتمامالدفع'))
+    ) {
+      headerMap.checkoutsInitiated = h;
+    } else if (
       !headerMap.purchases &&
-      !isRateOrRatio &&
-      (norm.includes('طلبات') ||
+      !isRateOrValuePerMetric &&
+      !norm.includes('value') &&
+      (norm.includes('purchases') ||
         norm.includes('مشتريات') ||
-        norm.includes('تحويلات') ||
-        norm.includes('احالات') ||
-        norm.includes('conversions') ||
-        norm.includes('purchases') ||
+        norm.includes('طلبات') ||
         norm.includes('completepayment') ||
         norm.includes('orders') ||
-        norm === 'results' ||
-        norm === 'النتائج' ||
         norm === 'عملياتالشراء')
     ) {
       headerMap.purchases = h;
@@ -570,7 +623,7 @@ export function parseCampaignCSV(
       headerMap.impressions = h;
     } else if (
       !headerMap.clicks &&
-      !isRateOrRatio &&
+      !isRateOrValuePerMetric &&
       (norm.includes('نقرات') ||
         norm.includes('clicks') ||
         norm === 'click' ||
@@ -578,12 +631,6 @@ export function parseCampaignCSV(
         norm.includes('interactions'))
     ) {
       headerMap.clicks = h;
-    } else if (
-      !headerMap.addToCart &&
-      !isRateOrRatio &&
-      (norm.includes('سله') || norm.includes('اضافه') || norm.includes('addtocart') || norm.includes('addstocart') || norm.includes('addcart'))
-    ) {
-      headerMap.addToCart = h;
     } else if (!headerMap.reach && (norm === 'reach' || norm === 'الوصول')) {
       headerMap.reach = h;
     } else if (!headerMap.frequency && (norm === 'frequency' || norm === 'التكرار')) {
@@ -591,12 +638,35 @@ export function parseCampaignCSV(
     }
   }
 
-  // Fallback for "campaign" if report is ad-set or ad-only without campaign column
+  // Fallback for purchases if report only had generic "Conversions" / "Results" without "Purchases"
+  if (!headerMap.purchases) {
+    for (const h of rawHeaders) {
+      const norm = normalizeHeader(h);
+      const isRateOrValue =
+        norm.includes('costper') ||
+        norm.includes('value') ||
+        norm.includes('rate') ||
+        norm.includes('تكلفه') ||
+        norm.includes('قيمه');
+      if (
+        !isRateOrValue &&
+        (norm === 'conversions' ||
+          norm === 'conversion' ||
+          norm === 'تحويلات' ||
+          norm === 'احالات' ||
+          norm === 'results' ||
+          norm === 'النتائج')
+      ) {
+        headerMap.purchases = h;
+        break;
+      }
+    }
+  }
+
   if (!headerMap.campaign && headerMap.adSet) {
     headerMap.campaign = headerMap.adSet;
   }
 
-  // Detect default platform from header signatures, filename, or banner
   const inferredFilePlatform =
     options.platformHint && options.platformHint !== 'auto'
       ? options.platformHint
@@ -625,16 +695,17 @@ export function parseCampaignCSV(
         ''
     ).trim();
 
+    const campaignType = String((headerMap.campaignType && row[headerMap.campaignType]) || '').trim();
     const adSetName = String((headerMap.adSet && row[headerMap.adSet]) || '').trim();
+    const adGroupId = String((headerMap.adGroupId && row[headerMap.adGroupId]) || '').trim();
     const adName = String((headerMap.adName && row[headerMap.adName]) || '').trim();
+    const adId = String((headerMap.adId && row[headerMap.adId]) || '').trim();
 
-    // Filter out Total / Grand Total / Summary rows from platform exports
     if (isSummaryOrTotalRow([rawPlatform, campaignName, adSetName, adName, String(row[headerMap.date] || '')])) {
       skippedSummaryRows += 1;
       return;
     }
 
-    // Check if this row is just a platform header with no campaign or spend (e.g. "ميتا,,,,,,,,,")
     if (rawPlatform && !campaignName && !adName && nonEmptyCount <= 1) {
       const detected = detectPlatform(rawPlatform);
       if (detected !== 'other') {
@@ -644,8 +715,6 @@ export function parseCampaignCSV(
       return;
     }
 
-    // Intelligent platform attribution:
-    // 1. Explicit hint overrides unknown, else row platform column, else forward fill, else file signature, else campaign name
     let platform: AdPlatform;
     if (options.platformHint && options.platformHint !== 'auto') {
       platform = options.platformHint;
@@ -677,7 +746,6 @@ export function parseCampaignCSV(
       return;
     }
 
-    // Extract Dates
     const rawStartDate = String(
       (headerMap.startDate && row[headerMap.startDate]) || row['التاريخ من'] || row['Start Date'] || ''
     ).trim();
@@ -690,7 +758,6 @@ export function parseCampaignCSV(
       (headerMap.date && row[headerMap.date]) || row['Date'] || row['التاريخ'] || ''
     ).trim();
 
-    // Handle single date cell containing a range like "2026-10-22 - 2026-10-28"
     let parsedRangeStart = '';
     let parsedRangeEnd = '';
     if (rawSingleDate && (rawSingleDate.includes(' إلى ') || rawSingleDate.includes(' - '))) {
@@ -735,8 +802,18 @@ export function parseCampaignCSV(
     const clicks = Math.round(
       parseNumber(headerMap.clicks ? row[headerMap.clicks] : row['Clicks'] || row['النقرات'] || 0)
     );
+    const pageViews = Math.round(
+      parseNumber(headerMap.pageViews ? row[headerMap.pageViews] : row['Page views (website)'] || 0)
+    );
     const addToCart = Math.round(
       parseNumber(headerMap.addToCart ? row[headerMap.addToCart] : row['الإضافة للسلة'] || row['Add to Cart'] || 0)
+    );
+    const checkoutsInitiated = Math.round(
+      parseNumber(
+        headerMap.checkoutsInitiated
+          ? row[headerMap.checkoutsInitiated]
+          : row['Checkouts initiated (website)'] || 0
+      )
     );
     const reach = headerMap.reach ? Math.round(parseNumber(row[headerMap.reach])) : undefined;
     const frequency = headerMap.frequency ? Number(parseNumber(row[headerMap.frequency]).toFixed(2)) : undefined;
@@ -746,14 +823,21 @@ export function parseCampaignCSV(
     const ctr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
     const cpc = clicks > 0 ? Number((spend / clicks).toFixed(2)) : 0;
     const cpm = impressions > 0 ? Number(((spend / impressions) * 1000).toFixed(2)) : 0;
+    const costPerPageView = pageViews > 0 ? Number((spend / pageViews).toFixed(2)) : 0;
     const costPerAddToCart = addToCart > 0 ? Number((spend / addToCart).toFixed(2)) : 0;
+    const costPerCheckout = checkoutsInitiated > 0 ? Number((spend / checkoutsInitiated).toFixed(2)) : 0;
     const cartConversionRate = addToCart > 0 ? Number(((purchases / addToCart) * 100).toFixed(1)) : 0;
+    const checkoutToPurchaseRate =
+      checkoutsInitiated > 0 ? Number(((purchases / checkoutsInitiated) * 100).toFixed(1)) : 0;
 
     results.push({
       id: `camp-${idx + 1}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       campaignName: campaignName || adName || adSetName || `حملة إعلانية ${idx + 1}`,
+      campaignType: campaignType || undefined,
       adSetName: adSetName || undefined,
+      adGroupId: adGroupId || undefined,
       adName: adName || undefined,
+      adId: adId || undefined,
       platform,
       startDate,
       endDate,
@@ -764,11 +848,16 @@ export function parseCampaignCSV(
       purchases,
       impressions,
       clicks,
+      pageViews,
       addToCart,
+      checkoutsInitiated,
       reach,
       frequency,
+      costPerPageView,
       costPerAddToCart,
+      costPerCheckout,
       cartConversionRate,
+      checkoutToPurchaseRate,
       roas,
       cpa,
       ctr,
@@ -798,6 +887,7 @@ export function parseCampaignCSV(
       mappedColumns: Object.values(headerMap),
       rawHeaders,
       hasAdLevelDetails: results.some((r) => Boolean(r.adName || r.adSetName)),
+      hasFunnelDetails: results.some((r) => Boolean(r.pageViews || r.addToCart || r.checkoutsInitiated)),
     },
   };
 }
@@ -813,14 +903,19 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
       totalPurchases: 0,
       totalImpressions: 0,
       totalClicks: 0,
+      totalPageViews: 0,
       totalAddToCart: 0,
+      totalCheckoutsInitiated: 0,
       roas: 0,
       cpa: 0,
       ctr: 0,
       cpc: 0,
       cpm: 0,
+      costPerPageView: 0,
       costPerAddToCart: 0,
+      costPerCheckout: 0,
       cartConversionRate: 0,
+      checkoutToPurchaseRate: 0,
       netProfitEstimate: 0,
       aov: 0,
       campaignCount: 0,
@@ -834,7 +929,9 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
   let totalPurchases = 0;
   let totalImpressions = 0;
   let totalClicks = 0;
+  let totalPageViews = 0;
   let totalAddToCart = 0;
+  let totalCheckoutsInitiated = 0;
 
   let minDate = campaigns[0].startDate || campaigns[0].date;
   let maxDate = campaigns[0].endDate || campaigns[0].date;
@@ -845,7 +942,9 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
     totalPurchases += c.purchases;
     totalImpressions += c.impressions;
     totalClicks += c.clicks;
+    if (c.pageViews) totalPageViews += c.pageViews;
     if (c.addToCart) totalAddToCart += c.addToCart;
+    if (c.checkoutsInitiated) totalCheckoutsInitiated += c.checkoutsInitiated;
 
     if (c.startDate && c.startDate < minDate) minDate = c.startDate;
     if (c.endDate && c.endDate > maxDate) maxDate = c.endDate;
@@ -856,8 +955,14 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
   const ctr = totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0;
   const cpc = totalClicks > 0 ? Number((totalSpend / totalClicks).toFixed(2)) : 0;
   const cpm = totalImpressions > 0 ? Number(((totalSpend / totalImpressions) * 1000).toFixed(2)) : 0;
+  const costPerPageView = totalPageViews > 0 ? Number((totalSpend / totalPageViews).toFixed(2)) : 0;
   const costPerAddToCart = totalAddToCart > 0 ? Number((totalSpend / totalAddToCart).toFixed(2)) : 0;
-  const cartConversionRate = totalAddToCart > 0 ? Number(((totalPurchases / totalAddToCart) * 100).toFixed(1)) : 0;
+  const costPerCheckout =
+    totalCheckoutsInitiated > 0 ? Number((totalSpend / totalCheckoutsInitiated).toFixed(2)) : 0;
+  const cartConversionRate =
+    totalAddToCart > 0 ? Number(((totalPurchases / totalAddToCart) * 100).toFixed(1)) : 0;
+  const checkoutToPurchaseRate =
+    totalCheckoutsInitiated > 0 ? Number(((totalPurchases / totalCheckoutsInitiated) * 100).toFixed(1)) : 0;
   const netProfitEstimate = Number((totalRevenue - totalSpend).toFixed(2));
   const aov = totalPurchases > 0 ? Number((totalRevenue / totalPurchases).toFixed(2)) : 0;
 
@@ -867,20 +972,118 @@ export function calculateAggregatedMetrics(campaigns: CampaignData[]): Aggregate
     totalPurchases,
     totalImpressions,
     totalClicks,
+    totalPageViews,
     totalAddToCart,
+    totalCheckoutsInitiated,
     roas,
     cpa,
     ctr,
     cpc,
     cpm,
+    costPerPageView,
     costPerAddToCart,
+    costPerCheckout,
     cartConversionRate,
+    checkoutToPurchaseRate,
     netProfitEstimate,
     aov,
     campaignCount: campaigns.length,
     startDate: minDate,
     endDate: maxDate,
   };
+}
+
+/**
+ * Aggregates campaign rows into 3 clean hierarchy levels:
+ * 1) Campaigns  2) Ad Groups (Ad Sets)  3) Individual Ads
+ */
+export function buildHierarchyDrilldown(
+  campaigns: CampaignData[],
+  level: 'campaign' | 'adGroup' | 'ad'
+): HierarchyDrilldownRow[] {
+  const groups = new Map<string, CampaignData[]>();
+
+  for (const c of campaigns) {
+    let key = '';
+    if (level === 'campaign') {
+      key = `${c.platform}::${c.campaignName}`;
+    } else if (level === 'adGroup') {
+      const groupName = c.adSetName || '(بدون مجموعة إعلانية محددة)';
+      key = `${c.platform}::${c.campaignName}::${c.adGroupId || groupName}`;
+    } else {
+      const adLabel = c.adName || c.campaignName;
+      key = `${c.platform}::${c.campaignName}::${c.adSetName || ''}::${c.adId || adLabel}`;
+    }
+
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+
+  const rows: HierarchyDrilldownRow[] = [];
+
+  for (const [key, items] of groups.entries()) {
+    const first = items[0];
+    const agg = calculateAggregatedMetrics(items);
+
+    const uniqueSubItems = new Set<string>();
+    if (level === 'campaign') {
+      items.forEach((i) => uniqueSubItems.add(i.adGroupId || i.adSetName || i.adId || i.adName || i.id));
+    } else if (level === 'adGroup') {
+      items.forEach((i) => uniqueSubItems.add(i.adId || i.adName || i.id));
+    } else {
+      items.forEach((i) => uniqueSubItems.add(i.startDate || i.date));
+    }
+
+    const primaryName =
+      level === 'campaign'
+        ? first.campaignName
+        : level === 'adGroup'
+        ? first.adSetName || first.campaignName
+        : first.adName || first.campaignName;
+
+    const entityId =
+      level === 'adGroup'
+        ? first.adGroupId
+        : level === 'ad'
+        ? first.adId
+        : undefined;
+
+    rows.push({
+      key,
+      level,
+      primaryName,
+      entityId,
+      campaignName: first.campaignName,
+      campaignType: first.campaignType,
+      adSetName: first.adSetName,
+      adGroupId: first.adGroupId,
+      adName: first.adName,
+      adId: first.adId,
+      platform: first.platform,
+      startDate: agg.startDate,
+      endDate: agg.endDate,
+      subItemsCount: uniqueSubItems.size,
+      spend: agg.totalSpend,
+      revenue: agg.totalRevenue,
+      purchases: agg.totalPurchases,
+      impressions: agg.totalImpressions,
+      clicks: agg.totalClicks,
+      pageViews: agg.totalPageViews,
+      addToCart: agg.totalAddToCart,
+      checkoutsInitiated: agg.totalCheckoutsInitiated,
+      roas: agg.roas,
+      cpa: agg.cpa,
+      ctr: agg.ctr,
+      cpc: agg.cpc,
+      cpm: agg.cpm,
+      costPerAddToCart: agg.costPerAddToCart,
+      costPerCheckout: agg.costPerCheckout,
+      cartConversionRate: agg.cartConversionRate,
+      checkoutToPurchaseRate: agg.checkoutToPurchaseRate,
+    });
+  }
+
+  return rows;
 }
 
 /**
@@ -932,8 +1135,6 @@ function enumerateIsoDays(startIso: string, endIso: string, maxDays = 90): strin
 
 /**
  * Builds a chronological Day-by-Day breakdown from campaigns.
- * If exact daily rows exist (startDate === endDate), aggregates exact daily metrics.
- * Otherwise distributes multi-day period campaigns evenly across active days with `isEstimated: true`.
  */
 export function calculateDailyBreakdown(campaigns: CampaignData[]): {
   days: DailyBreakdownItem[];
@@ -968,7 +1169,9 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
       purchases: number;
       impressions: number;
       clicks: number;
+      pageViews: number;
       addToCart: number;
+      checkoutsInitiated: number;
       platforms: Set<AdPlatform>;
       items: CampaignData[];
       isEstimated: boolean;
@@ -983,7 +1186,9 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
         purchases: 0,
         impressions: 0,
         clicks: 0,
+        pageViews: 0,
         addToCart: 0,
+        checkoutsInitiated: 0,
         platforms: new Set<AdPlatform>(),
         items: [],
         isEstimated,
@@ -1001,7 +1206,9 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
       bucket.purchases += c.purchases;
       bucket.impressions += c.impressions;
       bucket.clicks += c.clicks;
+      bucket.pageViews += c.pageViews || 0;
       bucket.addToCart += c.addToCart || 0;
+      bucket.checkoutsInitiated += c.checkoutsInitiated || 0;
       bucket.platforms.add(c.platform);
       bucket.items.push(c);
       bucket.isEstimated = false;
@@ -1015,7 +1222,9 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
         bucket.purchases += c.purchases / count;
         bucket.impressions += c.impressions / count;
         bucket.clicks += c.clicks / count;
+        bucket.pageViews += (c.pageViews || 0) / count;
         bucket.addToCart += (c.addToCart || 0) / count;
+        bucket.checkoutsInitiated += (c.checkoutsInitiated || 0) / count;
         bucket.platforms.add(c.platform);
         bucket.items.push({
           ...c,
@@ -1024,21 +1233,25 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
           purchases: Number((c.purchases / count).toFixed(1)),
           impressions: Math.round(c.impressions / count),
           clicks: Math.round(c.clicks / count),
+          pageViews: Math.round((c.pageViews || 0) / count),
           addToCart: Math.round((c.addToCart || 0) / count),
+          checkoutsInitiated: Math.round((c.checkoutsInitiated || 0) / count),
         });
       }
     }
   }
 
   const sortedDates = Array.from(dayMap.keys()).sort();
-  const days: DailyBreakdownItem[] = sortedDates.map((date, idx) => {
+  const days: DailyBreakdownItem[] = sortedDates.map((date) => {
     const b = dayMap.get(date)!;
     const spend = Number(b.spend.toFixed(2));
     const revenue = Number(b.revenue.toFixed(2));
     const purchases = Number(b.purchases.toFixed(1));
     const impressions = Math.round(b.impressions);
     const clicks = Math.round(b.clicks);
+    const pageViews = Math.round(b.pageViews);
     const addToCart = Math.round(b.addToCart);
+    const checkoutsInitiated = Math.round(b.checkoutsInitiated);
 
     const roas = spend > 0 ? Number((revenue / spend).toFixed(2)) : 0;
     const cpa = purchases > 0 ? Number((spend / purchases).toFixed(2)) : spend;
@@ -1053,7 +1266,9 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
       purchases,
       impressions,
       clicks,
+      pageViews,
       addToCart,
+      checkoutsInitiated,
       roas,
       cpa,
       ctr,
@@ -1068,7 +1283,6 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
     };
   });
 
-  // Compute Day-over-Day deltas
   for (let i = 1; i < days.length; i++) {
     const prev = days[i - 1];
     const curr = days[i];
@@ -1089,7 +1303,6 @@ export function calculateDailyBreakdown(campaigns: CampaignData[]): {
       .filter((d) => d.spend > 0)
       .sort((a, b) => a.roas - b.roas || b.cpa - a.cpa)[0] || null;
 
-  // Trend & creative fatigue detection comparing first half vs second half of days
   let trendDirection: 'improving' | 'stable' | 'declining' = 'stable';
   let fatigueAlert: string | null = null;
 
@@ -1155,7 +1368,7 @@ export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem
   const groups = new Map<string, CampaignData[]>();
 
   for (const c of campaigns) {
-    const key = `${c.platform}::${c.campaignName}::${c.adSetName || ''}::${c.adName || ''}`;
+    const key = `${c.platform}::${c.campaignName}::${c.adSetName || ''}::${c.adId || c.adName || ''}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(c);
   }
@@ -1186,8 +1399,11 @@ export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem
     items.push({
       key,
       adName: first.adName || first.campaignName,
+      adId: first.adId,
       adSetName: first.adSetName,
+      adGroupId: first.adGroupId,
       campaignName: first.campaignName,
+      campaignType: first.campaignType,
       platform: first.platform,
       daysActive: uniqueDays.size || 1,
       firstDate: agg.startDate,
@@ -1197,7 +1413,9 @@ export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem
       purchases: agg.totalPurchases,
       impressions: agg.totalImpressions,
       clicks: agg.totalClicks,
+      pageViews: agg.totalPageViews,
       addToCart: agg.totalAddToCart,
+      checkoutsInitiated: agg.totalCheckoutsInitiated,
       roas: agg.roas,
       cpa: agg.cpa,
       ctr: agg.ctr,
@@ -1246,9 +1464,6 @@ export function getPerformanceTier(roas: number, cpa: number, avgCpa: number): {
   };
 }
 
-/**
- * Returns the exact real campaign dataset sent by the user in this session.
- */
 export function generateClientUploadedData(): CampaignData[] {
   const csv = `المنصة,اسم الحملة,التاريخ من,التاريخ إلى,المصروف (ر.س),المبيعات (ر.س),عدد الطلبات,مرات الظهور,النقرات,الإضافة للسلة
 سناب شات,Ad #1 - OffersPage,2026-10-22,2026-11-12,5.23,0,0,432,5,8
@@ -1262,55 +1477,29 @@ export function generateClientUploadedData(): CampaignData[] {
   return parsed.data;
 }
 
-/**
- * Creates rich realistic sample data simulating multi-platform E-commerce campaign.
- */
 export function generateDemoCampaigns(): CampaignData[] {
   return generateClientUploadedData();
 }
 
-/**
- * Generates a realistic day-by-day multi-platform dataset (Snapchat, TikTok, Meta, Google)
- * with Ad Set & Ad Name granularity so users can test daily exports immediately.
- */
 export function generateSampleDailyMultiPlatformCSV(): string {
-  const header = 'Platform,Campaign Name,Ad Set Name,Ad Name,Day,Amount Spent,Purchases Conversion Value,Purchases,Impressions,Clicks,Adds to Cart\n';
+  const header =
+    'Platform,Campaign name,Campaign type,Ad group name,Ad group ID,Ad name,Ad ID,By Day,Spend,Purchase value (website),Purchases (website),Impressions,Clicks (destination),Page views (website),Adds to cart (website),Checkouts initiated (website)\n';
   const rows = [
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_Hook_UGC_01,2026-11-01,145.50,1890,14,18500,320,85',
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_BeforeAfter_02,2026-11-01,92.00,640,5,11200,190,42',
-    'TikTok,TikTok_Purchase_Tafteeh,Lookalike_Purchasers,SparkAd_Creator_Sara,2026-11-01,210.00,2950,21,34000,780,140',
-    'Meta,Meta_Conversions_Skincare,IG_Reels_Interest,Carousel_Bundle_Offer,2026-11-01,180.00,1440,11,22400,410,96',
-    'Google,Google_Search_Brand_KSA,Exact_Skincare_Terms,RSA_BestSeller_Offer,2026-11-01,85.00,980,8,4200,260,35',
+    'Snapchat,Snap_Sales_GlowSkin,Web Conversions,Broad_KSA_Women_18-34,AG-901,Video_Hook_UGC_01,AD-1001,2026-11-01,145.50,1890,14,18500,320,275,85,29',
+    'Snapchat,Snap_Sales_GlowSkin,Web Conversions,Broad_KSA_Women_18-34,AG-901,Video_BeforeAfter_02,AD-1002,2026-11-01,92.00,640,5,11200,190,150,42,12',
+    'TikTok,TikTok_Purchase_Tafteeh,Web Conversions,Lookalike_Purchasers,AG-801,SparkAd_Creator_Sara,AD-2001,2026-11-01,210.00,2950,21,34000,780,620,140,48',
+    'Meta,Meta_Conversions_Skincare,Sales,IG_Reels_Interest,AG-701,Carousel_Bundle_Offer,AD-3001,2026-11-01,180.00,1440,11,22400,410,340,96,31',
+    'Google,Google_Search_Brand_KSA,Search,Exact_Skincare_Terms,AG-601,RSA_BestSeller_Offer,AD-4001,2026-11-01,85.00,980,8,4200,260,230,35,16',
 
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_Hook_UGC_01,2026-11-02,162.00,2310,17,20400,355,94',
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_BeforeAfter_02,2026-11-02,95.00,410,3,11900,165,31',
-    'TikTok,TikTok_Purchase_Tafteeh,Lookalike_Purchasers,SparkAd_Creator_Sara,2026-11-02,235.00,3420,25,38200,840,162',
-    'Meta,Meta_Conversions_Skincare,IG_Reels_Interest,Carousel_Bundle_Offer,2026-11-02,190.00,1710,13,24100,445,108',
-    'Google,Google_Search_Brand_KSA,Exact_Skincare_Terms,RSA_BestSeller_Offer,2026-11-02,88.00,1120,9,4500,285,40',
-
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_Hook_UGC_01,2026-11-03,180.00,2520,18,22100,390,104',
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_BeforeAfter_02,2026-11-03,98.00,180,1,12300,120,18',
-    'TikTok,TikTok_Purchase_Tafteeh,Lookalike_Purchasers,SparkAd_Creator_Sara,2026-11-03,260.00,3890,28,41500,910,175',
-    'Meta,Meta_Conversions_Skincare,IG_Reels_Interest,Carousel_Bundle_Offer,2026-11-03,195.00,1950,15,25000,460,115',
-    'Google,Google_Search_Brand_KSA,Exact_Skincare_Terms,RSA_BestSeller_Offer,2026-11-03,90.00,1250,10,4800,310,44',
-
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_Hook_UGC_01,2026-11-04,210.00,3150,23,25400,440,122',
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_BeforeAfter_02,2026-11-04,105.00,150,1,13100,98,14',
-    'TikTok,TikTok_Purchase_Tafteeh,Lookalike_Purchasers,SparkAd_Creator_Sara,2026-11-04,275.00,3100,22,43000,810,148',
-    'Meta,Meta_Conversions_Skincare,IG_Reels_Interest,Carousel_Bundle_Offer,2026-11-04,205.00,2250,17,26300,490,124',
-    'Google,Google_Search_Brand_KSA,Exact_Skincare_Terms,RSA_BestSeller_Offer,2026-11-04,94.00,1340,11,5100,325,48',
-
-    'Snapchat,Snap_Sales_GlowSkin,Broad_KSA_Women_18-34,Video_Hook_UGC_01,2026-11-05,220.00,2980,21,26800,455,118',
-    'TikTok,TikTok_Purchase_Tafteeh,Lookalike_Purchasers,SparkAd_Creator_Sara,2026-11-05,290.00,2450,16,45200,690,121',
-    'Meta,Meta_Conversions_Skincare,IG_Reels_Interest,Carousel_Bundle_Offer,2026-11-05,215.00,2680,20,28100,530,139',
-    'Google,Google_Search_Brand_KSA,Exact_Skincare_Terms,RSA_BestSeller_Offer,2026-11-05,96.00,1490,12,5300,340,51',
+    'Snapchat,Snap_Sales_GlowSkin,Web Conversions,Broad_KSA_Women_18-34,AG-901,Video_Hook_UGC_01,AD-1001,2026-11-02,162.00,2310,17,20400,355,310,94,34',
+    'Snapchat,Snap_Sales_GlowSkin,Web Conversions,Broad_KSA_Women_18-34,AG-901,Video_BeforeAfter_02,AD-1002,2026-11-02,95.00,410,3,11900,165,130,31,9',
+    'TikTok,TikTok_Purchase_Tafteeh,Web Conversions,Lookalike_Purchasers,AG-801,SparkAd_Creator_Sara,AD-2001,2026-11-02,235.00,3420,25,38200,840,690,162,55',
+    'Meta,Meta_Conversions_Skincare,Sales,IG_Reels_Interest,AG-701,Carousel_Bundle_Offer,AD-3001,2026-11-02,190.00,1710,13,24100,445,380,108,36',
+    'Google,Google_Search_Brand_KSA,Search,Exact_Skincare_Terms,AG-601,RSA_BestSeller_Offer,AD-4001,2026-11-02,88.00,1120,9,4500,285,250,40,18',
   ];
   return header + rows.join('\n');
 }
 
-/**
- * Generates ready-to-download CSV sample text in Arabic with "التاريخ من" and "التاريخ إلى" and "الإضافة للسلة".
- */
 export function generateSampleCSVString(): string {
   const header = 'المنصة,اسم الحملة,التاريخ من,التاريخ إلى,المصروف (ر.س),المبيعات (ر.س),عدد الطلبات,مرات الظهور,النقرات,الإضافة للسلة\n';
   const rows = [
@@ -1326,10 +1515,6 @@ export function generateSampleCSVString(): string {
   return header + rows.join('\n');
 }
 
-/**
- * Rule-based fallback marketing analyst that produces structured AI-like report
- * including Day-by-Day & Ad-level insights if Gemini API key is missing or offline.
- */
 export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysisResult {
   const overall = calculateAggregatedMetrics(campaigns);
   const platforms = calculatePlatformBreakdown(campaigns);
@@ -1337,7 +1522,13 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
   const adBreakdown = calculateAdBreakdown(campaigns);
 
   const sortedPlatforms = [...platforms].sort((a, b) => b.roas - a.roas);
-  const topPlatform = sortedPlatforms[0] || { platform: 'snapchat' as AdPlatform, roas: 0, cpa: 0, platformNameAr: 'غير محدد', totalPurchases: 0 };
+  const topPlatform = sortedPlatforms[0] || {
+    platform: 'snapchat' as AdPlatform,
+    roas: 0,
+    cpa: 0,
+    platformNameAr: 'غير محدد',
+    totalPurchases: 0,
+  };
 
   const campaignsSortedByCpa = [...campaigns].filter((c) => c.purchases > 0).sort((a, b) => b.cpa - a.cpa);
   const highestCpaCampaign = campaignsSortedByCpa[0]?.campaignName || 'لا توجد بيانات كافية';
@@ -1388,9 +1579,10 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
     });
   }
 
-  const periodText = overall.startDate && overall.endDate
-    ? `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`
-    : `خلال الفترة الزمنية المحددة في الملف`;
+  const periodText =
+    overall.startDate && overall.endDate
+      ? `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`
+      : `خلال الفترة الزمنية المحددة في الملف`;
 
   const fatigueWarnings: string[] = [];
   if (dailySummary.fatigueAlert) {
@@ -1398,7 +1590,9 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
   }
   const fatiguedAds = adBreakdown.filter((a) => a.fatigueSignal === 'fatigued');
   fatiguedAds.slice(0, 3).forEach((ad) => {
-    fatigueWarnings.push(`إعلان "${ad.adName}" (${PLATFORM_NAMES_AR[ad.platform]}) أظهر ارتفاعاً في التكلفة أو عائد منخفض (${ad.roas}x).`);
+    fatigueWarnings.push(
+      `إعلان "${ad.adName}" (${PLATFORM_NAMES_AR[ad.platform]}) أظهر ارتفاعاً في التكلفة أو عائد منخفض (${ad.roas}x).`
+    );
   });
 
   const adLevelRecommendations = adBreakdown.slice(0, 6).map((ad) => {
@@ -1437,7 +1631,10 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
         ? `تم تحليل ${days.length} يوم فعلي يوم بيوم. اتجاه الأداء العام ${dailySummary.trendDirection === 'improving' ? 'في تحسن مستمر' : dailySummary.trendDirection === 'declining' ? 'يشهد تراجعاً يتطلب تدخلاً' : 'مستقر نسبياً'}.`
         : `البيانات المرفوعة مجمعة على مستوى الفترة؛ ${bestDayMsg} لرفع دقة التوصيات اليومية، يُنصح بتصدير التقرير مقسماً يوم بيوم (By Day / Day).`,
       bestPerformingDays: bestDayMsg,
-      fatigueWarnings: fatigueWarnings.length > 0 ? fatigueWarnings : ['لم تُرصد علامات إجهاد إعلاني حادة حالياً، استمر في مراقبة الـ CTR والـ CPA يومياً.'],
+      fatigueWarnings:
+        fatigueWarnings.length > 0
+          ? fatigueWarnings
+          : ['لم تُرصد علامات إجهاد إعلاني حادة حالياً، استمر في مراقبة الـ CTR والـ CPA يومياً.'],
       dailyPacingAdvice: `متوسط الحرق اليومي الحالي ${dailySummary.avgDailySpend.toLocaleString()} ر.س يحقق ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س مبيعات يومياً. حافظ على سقف زيادة يومية لا يتجاوز 25% للحفاظ على استقرار الخوارزمية.`,
     },
     adLevelRecommendations,
@@ -1448,15 +1645,18 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
       lowestCpaCampaign,
       wasteEstimate: Math.round(totalWaste),
     },
-    budgetReallocationPlan: reallocation.length > 0 ? reallocation : [
-      {
-        fromPlatform: 'الإعلانات ذات العائد المنخفض',
-        toPlatform: topPlatform.platformNameAr,
-        recommendedShiftPercent: 25,
-        expectedRoasBoost: '+20% في العائد الكلي',
-        rationale: 'تركيز الميزانية على الإعلانات المثبتة الربحية يومياً.',
-      },
-    ],
+    budgetReallocationPlan:
+      reallocation.length > 0
+        ? reallocation
+        : [
+            {
+              fromPlatform: 'الإعلانات ذات العائد المنخفض',
+              toPlatform: topPlatform.platformNameAr,
+              recommendedShiftPercent: 25,
+              expectedRoasBoost: '+20% في العائد الكلي',
+              rationale: 'تركيز الميزانية على الإعلانات المثبتة الربحية يومياً.',
+            },
+          ],
     actionableRecommendations: [
       `توسيع الميزانية تدريجياً (20% كل 48 ساعة) على "${lowestCpaCampaign}" في منصة ${topPlatform.platformNameAr}.`,
       overall.totalAddToCart > 0
