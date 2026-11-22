@@ -36,6 +36,7 @@ import {
   calculateDailyBreakdown,
   calculateAdBreakdown,
   generateSampleCSVString,
+  normalizeDate,
 } from './utils/adMetrics';
 import {
   DEFAULT_REPORT_SETTINGS,
@@ -63,93 +64,9 @@ function resolveLegalRoute(pathname: string): LegalPageRoute | null {
   return null;
 }
 
-const MONTH_ABBR: Record<string, string> = {
-  jan: '01',
-  feb: '02',
-  mar: '03',
-  apr: '04',
-  may: '05',
-  jun: '06',
-  jul: '07',
-  aug: '08',
-  sep: '09',
-  sept: '09',
-  oct: '10',
-  nov: '11',
-  dec: '12',
-};
-
-/** Normalize any date string (including Snapchat AST timestamps & DD-MMM-YY labels) to YYYY-MM-DD */
+/** Normalize date using the unified parser (never parses campaign names) */
 function cleanIsoDate(raw?: string): string {
-  if (!raw) return '';
-  const str = String(raw)
-    .trim()
-    .replace(/\s+(AST|UTC|GMT|[A-Z]{2,4})$/i, '')
-    .trim();
-  if (!str || /^(ongoing|none|null|n\/a|-)$/i.test(str)) return '';
-
-  // Handle period strings like "2026-10-01 إلى 2026-10-31" -> extract first date
-  const firstPart = str.split(/\s+(?:إلى|to|–|—)\s+/i)[0]?.trim() || str;
-
-  const isoPrefix = firstPart.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (isoPrefix) {
-    return `${isoPrefix[1]}-${isoPrefix[2].padStart(2, '0')}-${isoPrefix[3].padStart(2, '0')}`;
-  }
-
-  const slashMatch = firstPart.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
-  if (slashMatch) {
-    const p1 = Number(slashMatch[1]);
-    const p2 = Number(slashMatch[2]);
-    const rawYear = slashMatch[3];
-    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
-    const month = p1 > 12 ? p2 : p1;
-    const day = p1 > 12 ? p1 : p2;
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    }
-  }
-
-  const textMonthMatch = firstPart.match(/(\d{1,2})[\s-]*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[\s-]*(\d{2,4})/i);
-  if (textMonthMatch) {
-    const day = textMonthMatch[1].padStart(2, '0');
-    const month = MONTH_ABBR[textMonthMatch[2].toLowerCase()];
-    const rawYear = textMonthMatch[3];
-    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
-    if (month) return `${year}-${month}-${day}`;
-  }
-
-  const parsed = new Date(firstPart);
-  if (!Number.isNaN(parsed.getTime())) {
-    const y = parsed.getFullYear();
-    if (y >= 2000 && y <= 2100) {
-      return parsed.toISOString().slice(0, 10);
-    }
-  }
-  return '';
-}
-
-/** Extract date embedded inside ad/campaign name if date column defaulted to today */
-function extractDateFromLabel(label?: string): string {
-  if (!label) return '';
-  // e.g. "28-10-26" or "03-10-2026"
-  const numMatch = label.match(/(?:^|[\s/_-])(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:$|[\s/_-])/);
-  if (numMatch) {
-    const d = Number(numMatch[1]);
-    const m = Number(numMatch[2]);
-    const y = numMatch[3].length === 2 ? `20${numMatch[3]}` : numMatch[3];
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    }
-  }
-  // e.g. "16Nov26" or "28 Oct 26"
-  const alphaMatch = label.match(/(\d{1,2})\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s*(\d{2,4})/i);
-  if (alphaMatch) {
-    const d = alphaMatch[1].padStart(2, '0');
-    const m = MONTH_ABBR[alphaMatch[2].toLowerCase()];
-    const y = alphaMatch[3].length === 2 ? `20${alphaMatch[3]}` : alphaMatch[3];
-    if (m) return `${y}-${m}-${d}`;
-  }
-  return '';
+  return normalizeDate(raw);
 }
 
 /** Sanitize campaign rows: remove summary/Total rows and resolve exact day dates */
@@ -159,28 +76,17 @@ function sanitizeCampaignRows(rows: CampaignData[]): CampaignData[] {
     .filter((row) => {
       const label = String(row.campaignName || (row as any).name || row.adName || '').trim();
       if (!label) return false;
-      if (/^(total|المجموع|الإجمالي)(\s+of|\s|$)/i.test(label)) return false;
+      if (/^(total|grand total|summary|all|المجموع|الإجمالي)(\s+of|\s|$)/i.test(label)) return false;
       return true;
     })
     .map((row) => {
       const campaignName = String(row.campaignName || (row as any).name || 'حملة بدون اسم').trim();
-      let exactDay =
-        cleanIsoDate(row.date) ||
+      const exactDay =
         cleanIsoDate(row.startDate) ||
+        cleanIsoDate(row.date) ||
         cleanIsoDate(row.endDate);
 
-      // If parser fell back to today's date because date column wasn't mapped, try extracting date from ad/adSet/campaign name
-      if (!exactDay || exactDay === todayStr) {
-        const fromNames =
-          extractDateFromLabel(row.adName) ||
-          extractDateFromLabel(row.adSetName) ||
-          extractDateFromLabel(campaignName);
-        if (fromNames) {
-          exactDay = fromNames;
-        }
-      }
-
-      const cleanStart = exactDay || cleanIsoDate(row.startDate) || todayStr;
+      const cleanStart = exactDay || todayStr;
       const cleanEnd =
         row.platform === 'snapchat'
           ? cleanStart
@@ -198,17 +104,12 @@ function sanitizeCampaignRows(rows: CampaignData[]): CampaignData[] {
 
 /** Extract YYYY-MM reliably from any date format */
 function extractMonthKeyFromRow(row: CampaignData, fallbackMonthKey: string): string {
-  const candidates = [row.date, row.startDate, row.endDate];
+  const candidates = [row.startDate, row.date, row.endDate];
   for (const raw of candidates) {
     if (!raw) continue;
     const normalized = cleanIsoDate(raw);
     const isoMatch = normalized.match(/^(\d{4}-\d{2})/);
     if (isoMatch) return isoMatch[1];
-
-    const anyYearMonth = String(raw).match(/(\d{4})[-/.](\d{1,2})/);
-    if (anyYearMonth) {
-      return `${anyYearMonth[1]}-${anyYearMonth[2].padStart(2, '0')}`;
-    }
   }
   return fallbackMonthKey;
 }
@@ -784,15 +685,20 @@ export default function App() {
           setClients((prev) =>
             prev.map((c) => (c.id === finalClient.id ? finalClient : c))
           );
-          const lastSavedMonth = monthKeys[monthKeys.length - 1];
-          const activeSnapshot = finalClient.months?.[lastSavedMonth];
-          if (activeSnapshot) {
-            const cleanSnapRows = sanitizeCampaignRows(activeSnapshot.campaigns || []);
-            setCampaigns(cleanSnapRows);
-            syncDatesFromCampaigns(cleanSnapRows);
+
+          // Display all newly saved months together so the user immediately sees the full imported range
+          const allSavedRows: CampaignData[] = [];
+          for (const mKey of monthKeys) {
+            const snap = finalClient.months?.[mKey];
+            if (snap?.campaigns) {
+              allSavedRows.push(...sanitizeCampaignRows(snap.campaigns));
+            }
           }
+          const lastSavedMonth = monthKeys[monthKeys.length - 1];
+          setCampaigns(allSavedRows);
+          syncDatesFromCampaigns(allSavedRows);
           setActiveMonthKey(lastSavedMonth);
-          setSelectedMonthKeys([lastSavedMonth]);
+          setSelectedMonthKeys(monthKeys);
           setHasUnsavedChanges(false);
 
           const labels = monthKeys.map((k) => formatMonthLabelAr(k)).join(' • ');
@@ -999,25 +905,22 @@ export default function App() {
       const latestMonth =
         detectedMonths.length > 0 ? detectedMonths[detectedMonths.length - 1] : activeMonthKey;
 
-      const latestMonthRows = groupedByMonth[latestMonth] || cleanedIncoming;
-      const incomingPlatforms = new Set(latestMonthRows.map((r) => r.platform));
+      const incomingPlatforms = new Set(cleanedIncoming.map((r) => r.platform));
       const keptCurrentOtherPlatforms = campaigns.filter(
-        (r) =>
-          !incomingPlatforms.has(r.platform) &&
-          (cleanIsoDate(r.date || r.startDate) || '').startsWith(latestMonth)
+        (r) => !incomingPlatforms.has(r.platform)
       );
 
       const nextDisplayDataset =
         mode === 'merge'
-          ? [...campaigns, ...latestMonthRows]
-          : [...keptCurrentOtherPlatforms, ...latestMonthRows];
+          ? [...campaigns, ...cleanedIncoming]
+          : [...keptCurrentOtherPlatforms, ...cleanedIncoming];
 
       setCampaigns(nextDisplayDataset);
       setSelectedPlatform('all');
       syncDatesFromCampaigns(nextDisplayDataset);
       setAiAnalysis(null);
       setActiveMonthKey(latestMonth);
-      setSelectedMonthKeys([latestMonth]);
+      setSelectedMonthKeys(detectedMonths.length > 0 ? detectedMonths : [latestMonth]);
 
       // Automatically split & persist each month separately to the active client on server
       if (user && activeClient) {
