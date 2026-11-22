@@ -73,12 +73,18 @@ const MONTH_MAP: Record<string, string> = {
 /**
  * Normalizes date formats (YYYY-MM-DD, YYYY/MM/DD, DD/MM/YYYY, DD-MM-YYYY,
  * Snapchat "2026-09-13 00:00:00 AST", "Oct 22, 2026", ignores "Ongoing")
- * to standard ISO YYYY-MM-DD.
+ * to standard ISO YYYY-MM-DD. Never guesses from campaign names.
  */
 export function normalizeDate(raw: unknown): string {
   if (raw === null || raw === undefined) return '';
   let str = String(raw).trim();
-  if (!str || /^(ongoing|none|null|n\/a|-|--)$/i.test(str)) return '';
+  if (!str || /^(ongoing|none|null|n\/a|-|--|total|all)$/i.test(str)) return '';
+
+  // Handle range string like "2026-10-01 to 2026-10-31" -> take first date
+  const rangeParts = str.split(/\s+(?:إلى|to|–|—)\s+/i);
+  if (rangeParts.length > 1 && rangeParts[0]) {
+    str = rangeParts[0].trim();
+  }
 
   // Strip timezone suffix (e.g. AST, UTC, GMT) and time portion
   str = str.replace(/\s+(AST|UTC|GMT|[A-Z]{2,4})$/i, '').trim();
@@ -95,10 +101,14 @@ export function normalizeDate(raw: unknown): string {
   // YYYY-M-D or YYYY/M/D
   const ymdMatch = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (ymdMatch) {
-    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+    const m = parseInt(ymdMatch[2], 10);
+    const d = parseInt(ymdMatch[3], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${ymdMatch[1]}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY (or MM/DD/YYYY if second part > 12)
+  // DD/MM/YYYY or DD-MM-YYYY (default to DD/MM/YYYY unless second part > 12)
   const dmyMatch = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (dmyMatch) {
     const p1 = parseInt(dmyMatch[1], 10);
@@ -107,7 +117,9 @@ export function normalizeDate(raw: unknown): string {
     if (p2 > 12 && p1 <= 12) {
       return `${year}-${String(p1).padStart(2, '0')}-${String(p2).padStart(2, '0')}`;
     }
-    return `${year}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+    if (p2 >= 1 && p2 <= 12 && p1 >= 1 && p1 <= 31) {
+      return `${year}-${String(p2).padStart(2, '0')}-${String(p1).padStart(2, '0')}`;
+    }
   }
 
   // "Oct 22, 2026" or "October 22, 2026"
@@ -266,11 +278,12 @@ const HEADER_MATCH_KEYWORDS = [
 ];
 
 function isSummaryOrTotalRow(values: string[]): boolean {
-  const joined = values.join(' ').toLowerCase().trim();
-  if (!joined) return true;
-  return (
-    /^(total|grand total|summary|all campaigns|account total|total:|الإجمالي|المجموع|الاجمالي|إجمالي)/i.test(joined) ||
-    values.some((v) => /^(total:|total\b|grand total|الإجمالي|المجموع|إجمالي الحساب)/i.test(v.trim()))
+  const cleaned = values.map((v) => v.trim()).filter(Boolean);
+  if (cleaned.length === 0) return true;
+  return cleaned.some((v) =>
+    /^(total|grand total|summary|all campaigns|account total|total:|total\s+of|all|الإجمالي|المجموع|الاجمالي|إجمالي|الإجمالي الكلي)$/i.test(
+      v
+    )
   );
 }
 
@@ -435,24 +448,34 @@ export function parseCampaignCSV(
   for (const h of rawHeaders) {
     const norm = normalizeHeader(h);
 
-    const isRateOrRatio =
+    // Exclude rates, ratios, budgets, caps, and averages from metric totals
+    const isNonTotalMetric =
       norm.includes('costper') ||
       norm.includes('cost/') ||
       norm.includes('cpc') ||
       norm.includes('cpm') ||
+      norm.includes('ecpm') ||
       norm.includes('ctr') ||
       norm.includes('cpa') ||
       norm.includes('rate') ||
       norm.includes('percent') ||
+      norm.includes('ratio') ||
       norm.includes('valueper') ||
+      norm.includes('budget') ||
+      norm.includes('bid') ||
+      norm.includes('limit') ||
+      norm.includes('cap') ||
+      norm.includes('avg') ||
+      norm.includes('average') ||
       norm.includes('تكلفهال') ||
       norm.includes('سعر') ||
       norm.includes('نسبه') ||
-      norm.includes('معدل');
+      norm.includes('معدل') ||
+      norm.includes('ميزانيه');
 
     if (
       !headerMap.platform &&
-      (norm.includes('منصه') || norm.includes('platform') || norm.includes('channel') || norm.includes('قناه'))
+      (norm === 'platform' || norm === 'منصه' || norm === 'المنصه' || norm === 'channel' || norm === 'قناه')
     ) {
       headerMap.platform = h;
     } else if (!headerMap.adGroupId && (norm === 'adgroupid' || norm === 'adsetid' || norm === 'adsquadid')) {
@@ -467,7 +490,7 @@ export function parseCampaignCSV(
       headerMap.adSet = h;
     } else if (
       !headerMap.adName &&
-      (norm === 'ad' || norm === 'adname' || norm === 'الاعلان' || norm.includes('اسمالاعلان') || norm.includes('creative'))
+      (norm === 'ad' || norm === 'adname' || norm === 'الاعلان' || norm.includes('اسمالاعلان') || norm === 'creative' || norm === 'creativename')
     ) {
       headerMap.adName = h;
     } else if (
@@ -480,9 +503,12 @@ export function parseCampaignCSV(
       !headerMap.date &&
       (norm === 'day' ||
         norm === 'byday' ||
-        norm.includes('stattime') ||
-        norm.includes('تاريخ') ||
-        norm.includes('date') ||
+        norm === 'stattime' ||
+        norm === 'stattimeday' ||
+        norm === 'time' ||
+        norm === 'date' ||
+        norm === 'تاريخ' ||
+        norm === 'التاريخ' ||
         norm === 'اليوم' ||
         norm === 'يوم') &&
       !norm.includes('startdate') &&
@@ -502,9 +528,7 @@ export function parseCampaignCSV(
         norm.includes('datefrom') ||
         norm.includes('fromdate'))
     ) {
-      if (norm !== 'starts' || !headerMap.startDate) {
-        headerMap.startDate = h;
-      }
+      headerMap.startDate = h;
     } else if (
       !headerMap.endDate &&
       (norm.includes('تاريخالي') ||
@@ -516,33 +540,44 @@ export function parseCampaignCSV(
         norm.includes('dateto') ||
         norm.includes('todate'))
     ) {
-      if (norm !== 'ends' || !headerMap.endDate) {
-        headerMap.endDate = h;
-      }
+      headerMap.endDate = h;
     } else if (
       !headerMap.roas &&
       (norm.includes('roas') || norm.includes('convvaluecost') || norm.includes('العائدعليالانفاق'))
     ) {
       headerMap.roas = h;
     } else if (
-      !headerMap.spend &&
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
       (norm.includes('مصروف') ||
         norm.includes('انفاق') ||
         norm.includes('منفق') ||
-        norm.includes('spend') ||
-        norm.includes('spent') ||
+        norm.includes('amountspent') ||
+        norm === 'spend' ||
+        norm === 'spent' ||
         norm === 'cost' ||
         norm === 'totalcost' ||
-        norm.startsWith('cost') ||
+        norm.startsWith('amountspent') ||
+        norm.startsWith('costsar') ||
+        norm.startsWith('costusd') ||
+        norm.startsWith('costaed') ||
+        norm.startsWith('spendsar') ||
+        norm.startsWith('spendusd') ||
         norm === 'التكلفه' ||
-        norm.includes('التكلفهالاجماليه') ||
-        norm === 'amount')
+        norm.includes('التكلفهالاجماليه'))
     ) {
-      headerMap.spend = h;
+      // Prefer explicit "Amount spent" / "Cost" over generic matches
+      const isStrongSpend =
+        norm.includes('amountspent') ||
+        norm === 'cost' ||
+        norm === 'spend' ||
+        norm === 'totalcost' ||
+        norm.includes('المبلغالمنفق');
+      if (!headerMap.spend || isStrongSpend) {
+        headerMap.spend = h;
+      }
     } else if (
-      !headerMap.revenue &&
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
+      !norm.includes('roas') &&
       (norm.includes('مبيعات') ||
         norm.includes('ايرادات') ||
         norm.includes('دخل') ||
@@ -557,9 +592,19 @@ export function parseCampaignCSV(
         norm.includes('قيمهالمشتريات') ||
         norm.includes('قيمهالدفع'))
     ) {
-      headerMap.revenue = h;
+      const isStrongRevenue =
+        norm.includes('purchasesconversionvalue') ||
+        norm.includes('completepaymentvalue') ||
+        norm.includes('purchasevalue') ||
+        norm.includes('conversionvalue') ||
+        norm.includes('convvalue');
+      if (!headerMap.revenue || isStrongRevenue) {
+        headerMap.revenue = h;
+      }
     } else if (
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
+      !norm.includes('value') &&
+      !norm.includes('roas') &&
       (norm.includes('طلبات') ||
         norm.includes('مشتريات') ||
         norm.includes('تحويلات') ||
@@ -572,11 +617,18 @@ export function parseCampaignCSV(
         norm === 'النتائج' ||
         norm === 'عملياتالشراء')
     ) {
-      const isExplicitPurchases = norm.includes('purchase') || norm.includes('مشتريات') || norm.includes('طلبات');
+      const isExplicitPurchases =
+        norm === 'purchases' ||
+        norm === 'websitepurchases' ||
+        norm === 'completepayment' ||
+        norm === 'conversions' ||
+        norm.includes('مشتريات') ||
+        norm.includes('طلبات');
       if (!headerMap.purchases || isExplicitPurchases) {
         headerMap.purchases = h;
       }
     } else if (
+      !isNonTotalMetric &&
       !headerMap.impressions &&
       (norm.includes('ظهور') ||
         norm.includes('انتشار') ||
@@ -586,10 +638,11 @@ export function parseCampaignCSV(
     ) {
       headerMap.impressions = h;
     } else if (
+      !isNonTotalMetric &&
       !headerMap.clicks &&
-      !isRateOrRatio &&
       (norm.includes('نقرات') ||
-        norm.includes('clicks') ||
+        norm === 'clicks' ||
+        norm === 'linkclicks' ||
         norm === 'click' ||
         norm.includes('swipeup') ||
         norm.includes('interactions'))
@@ -597,19 +650,19 @@ export function parseCampaignCSV(
       headerMap.clicks = h;
     } else if (
       !headerMap.pageViews &&
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
       (norm.includes('landingpageview') || norm.includes('pagesviewed') || norm.includes('pageview'))
     ) {
       headerMap.pageViews = h;
     } else if (
       !headerMap.addToCart &&
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
       (norm.includes('سله') || norm.includes('اضافه') || norm.includes('addtocart') || norm.includes('addstocart') || norm.includes('addcart'))
     ) {
       headerMap.addToCart = h;
     } else if (
       !headerMap.checkoutsInitiated &&
-      !isRateOrRatio &&
+      !isNonTotalMetric &&
       (norm.includes('checkoutinitiated') || norm.includes('checkoutsinitiated') || norm.includes('checkoutsstarted'))
     ) {
       headerMap.checkoutsInitiated = h;
@@ -654,8 +707,9 @@ export function parseCampaignCSV(
 
     const adSetName = String((headerMap.adSet && row[headerMap.adSet]) || '').trim();
     const adName = String((headerMap.adName && row[headerMap.adName]) || '').trim();
+    const rawDateCell = String((headerMap.date && row[headerMap.date]) || '').trim();
 
-    if (isSummaryOrTotalRow([rawPlatform, campaignName, adSetName, adName, String(row[headerMap.date] || '')])) {
+    if (isSummaryOrTotalRow([rawPlatform, campaignName, adSetName, adName, rawDateCell])) {
       skippedSummaryRows += 1;
       return;
     }
