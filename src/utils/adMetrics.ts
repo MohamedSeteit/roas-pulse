@@ -178,7 +178,7 @@ export function detectPlatformFromHeaders(headers: string[], fileName = ''): AdP
     joined.includes('swipe up') ||
     joined.includes('paid impressions') ||
     joined.includes('paid ecpm') ||
-    joined.includes('purchase roas') && joined.includes('start time') ||
+    (joined.includes('purchase roas') && joined.includes('start time')) ||
     joined.includes('story opens') ||
     joined.includes('snapchat') ||
     fileNorm.includes('snap') ||
@@ -389,7 +389,7 @@ export interface ParseCampaignOptions {
 /**
  * Parses raw CSV/TSV string (including native Snapchat, TikTok, Meta, and Google Ads exports)
  * into structured CampaignData with exact daily date priority, total-row filtering,
- * platform auto-detection, and accurate purchases/revenue mapping.
+ * funnel steps, entity IDs, and accurate purchases/revenue mapping.
  */
 export function parseCampaignCSV(
   csvString: string,
@@ -455,9 +455,14 @@ export function parseCampaignCSV(
       (norm.includes('منصه') || norm.includes('platform') || norm.includes('channel') || norm.includes('قناه'))
     ) {
       headerMap.platform = h;
+    } else if (!headerMap.adGroupId && (norm === 'adgroupid' || norm === 'adsetid' || norm === 'adsquadid')) {
+      headerMap.adGroupId = h;
+    } else if (!headerMap.adId && norm === 'adid') {
+      headerMap.adId = h;
     } else if (
       !headerMap.adSet &&
-      (norm.includes('adset') || norm.includes('adgroup') || norm.includes('adsquad') || norm.includes('مجموعهاعلان') || norm.includes('مجموعه'))
+      (norm.includes('adset') || norm.includes('adgroup') || norm.includes('adsquad') || norm.includes('مجموعهاعلان') || norm.includes('مجموعه')) &&
+      !norm.endsWith('id')
     ) {
       headerMap.adSet = h;
     } else if (
@@ -467,7 +472,8 @@ export function parseCampaignCSV(
       headerMap.adName = h;
     } else if (
       !headerMap.campaign &&
-      (norm.includes('حمله') || norm.includes('الحمله') || norm.includes('campaign') || norm === 'اسم')
+      (norm.includes('حمله') || norm.includes('الحمله') || norm.includes('campaign') || norm === 'اسم') &&
+      !norm.endsWith('id')
     ) {
       headerMap.campaign = h;
     } else if (
@@ -496,7 +502,6 @@ export function parseCampaignCSV(
         norm.includes('datefrom') ||
         norm.includes('fromdate'))
     ) {
-      // Note: skip Meta's campaign launch "Starts" column if a daily "Day" or "Reporting starts" exists
       if (norm !== 'starts' || !headerMap.startDate) {
         headerMap.startDate = h;
       }
@@ -567,7 +572,6 @@ export function parseCampaignCSV(
         norm === 'النتائج' ||
         norm === 'عملياتالشراء')
     ) {
-      // Prioritize explicit Purchases / Purchases (website) over generic Conversions (TikTok has both!)
       const isExplicitPurchases = norm.includes('purchase') || norm.includes('مشتريات') || norm.includes('طلبات');
       if (!headerMap.purchases || isExplicitPurchases) {
         headerMap.purchases = h;
@@ -592,11 +596,23 @@ export function parseCampaignCSV(
     ) {
       headerMap.clicks = h;
     } else if (
+      !headerMap.pageViews &&
+      !isRateOrRatio &&
+      (norm.includes('landingpageview') || norm.includes('pagesviewed') || norm.includes('pageview'))
+    ) {
+      headerMap.pageViews = h;
+    } else if (
       !headerMap.addToCart &&
       !isRateOrRatio &&
       (norm.includes('سله') || norm.includes('اضافه') || norm.includes('addtocart') || norm.includes('addstocart') || norm.includes('addcart'))
     ) {
       headerMap.addToCart = h;
+    } else if (
+      !headerMap.checkoutsInitiated &&
+      !isRateOrRatio &&
+      (norm.includes('checkoutinitiated') || norm.includes('checkoutsinitiated') || norm.includes('checkoutsstarted'))
+    ) {
+      headerMap.checkoutsInitiated = h;
     } else if (!headerMap.reach && (norm === 'reach' || norm === 'الوصول')) {
       headerMap.reach = h;
     } else if (!headerMap.frequency && (norm === 'frequency' || norm === 'التكرار')) {
@@ -713,11 +729,9 @@ export function parseCampaignCSV(
     let endDate = '';
 
     if (exactDay) {
-      // Daily breakdown report (Meta Day / TikTok By Day)
       startDate = exactDay;
       endDate = exactDay;
     } else if (platform === 'snapchat' && rawStartDate) {
-      // Snapchat daily rows use Start Time (e.g. 2026-09-13 00:00:00 AST) -> End Time (next day 00:00)
       startDate = normalizeDate(rawStartDate);
       endDate = startDate;
     } else {
@@ -753,11 +767,20 @@ export function parseCampaignCSV(
     const clicks = Math.round(
       parseNumber(headerMap.clicks ? row[headerMap.clicks] : row['Clicks'] || row['النقرات'] || 0)
     );
+    const pageViews = Math.round(
+      parseNumber(headerMap.pageViews ? row[headerMap.pageViews] : 0)
+    );
     const addToCart = Math.round(
       parseNumber(headerMap.addToCart ? row[headerMap.addToCart] : row['الإضافة للسلة'] || row['Add to Cart'] || 0)
     );
+    const checkoutsInitiated = Math.round(
+      parseNumber(headerMap.checkoutsInitiated ? row[headerMap.checkoutsInitiated] : 0)
+    );
     const reach = headerMap.reach ? Math.round(parseNumber(row[headerMap.reach])) : undefined;
     const frequency = headerMap.frequency ? Number(parseNumber(row[headerMap.frequency]).toFixed(2)) : undefined;
+
+    const adGroupId = headerMap.adGroupId ? String(row[headerMap.adGroupId] || '').trim() || undefined : undefined;
+    const adId = headerMap.adId ? String(row[headerMap.adId] || '').trim() || undefined : undefined;
 
     const roas = spend > 0 ? Number((revenue / spend).toFixed(2)) : revenue > 0 ? 99 : 0;
     const cpa = purchases > 0 ? Number((spend / purchases).toFixed(2)) : spend;
@@ -772,6 +795,8 @@ export function parseCampaignCSV(
       campaignName: campaignName || adName || adSetName || `حملة إعلانية ${idx + 1}`,
       adSetName: adSetName || undefined,
       adName: adName || undefined,
+      adGroupId,
+      adId,
       platform,
       startDate,
       endDate,
@@ -782,7 +807,9 @@ export function parseCampaignCSV(
       purchases,
       impressions,
       clicks,
+      pageViews,
       addToCart,
+      checkoutsInitiated,
       reach,
       frequency,
       costPerAddToCart,
@@ -793,7 +820,7 @@ export function parseCampaignCSV(
       cpc,
       cpm,
       sourceFileName: options.fileName,
-    });
+    } as CampaignData);
   });
 
   const uniquePlatforms = Array.from(new Set(results.map((r) => r.platform)));
@@ -1489,6 +1516,7 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
     aiModelLabel: 'المحرك التحليلي الذكي (Rule-Based Fallback)',
   };
 }
+
 export interface HierarchyDrilldownRow {
   key: string;
   level: 'campaign' | 'adGroup' | 'ad';
