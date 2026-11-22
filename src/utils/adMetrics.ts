@@ -1489,3 +1489,140 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
     aiModelLabel: 'المحرك التحليلي الذكي (Rule-Based Fallback)',
   };
 }
+export interface HierarchyDrilldownRow {
+  key: string;
+  level: 'campaign' | 'adGroup' | 'ad';
+  primaryName: string;
+  entityId?: string;
+  campaignType?: string;
+  campaignName: string;
+  adSetName?: string;
+  adGroupId?: string;
+  adName?: string;
+  adId?: string;
+  platform: AdPlatform;
+  startDate: string;
+  endDate: string;
+  spend: number;
+  revenue: number;
+  purchases: number;
+  impressions: number;
+  clicks: number;
+  pageViews: number;
+  addToCart: number;
+  checkoutsInitiated: number;
+  roas: number;
+  cpa: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  costPerAddToCart: number;
+  costPerCheckout: number;
+  checkoutToPurchaseRate: number;
+}
+
+/**
+ * Aggregates campaign rows into Campaign, Ad Group (Ad Set), or Ad hierarchy levels
+ * for CampaignsTable drilldown & funnel analysis.
+ */
+export function buildHierarchyDrilldown(
+  campaigns: CampaignData[],
+  level: 'campaign' | 'adGroup' | 'ad'
+): HierarchyDrilldownRow[] {
+  if (!campaigns || campaigns.length === 0) return [];
+
+  const groups = new Map<string, CampaignData[]>();
+
+  for (const c of campaigns) {
+    const campName = c.campaignName || 'حملة غير مسماة';
+    const adSetName = c.adSetName || campName;
+    const adName = c.adName || adSetName;
+
+    let key = '';
+    if (level === 'campaign') {
+      key = `${c.platform}::${campName}`;
+    } else if (level === 'adGroup') {
+      key = `${c.platform}::${campName}::${adSetName}`;
+    } else {
+      key = `${c.platform}::${campName}::${adSetName}::${adName}`;
+    }
+
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+
+  const rows: HierarchyDrilldownRow[] = [];
+
+  for (const [key, items] of groups.entries()) {
+    const first = items[0];
+    const agg = calculateAggregatedMetrics(items);
+
+    let pageViews = 0;
+    let checkoutsInitiated = 0;
+    for (const item of items) {
+      pageViews += (item as any).pageViews || 0;
+      checkoutsInitiated += (item as any).checkoutsInitiated || 0;
+    }
+
+    const campName = first.campaignName || 'حملة غير مسماة';
+    const adSetName = first.adSetName || (level !== 'campaign' ? campName : undefined);
+    const adName = first.adName || (level === 'ad' ? adSetName || campName : undefined);
+
+    const adGroupId = (first as any).adGroupId || undefined;
+    const adId = (first as any).adId || undefined;
+    const campaignType = (first as any).campaignType || undefined;
+
+    const primaryName =
+      level === 'campaign'
+        ? campName
+        : level === 'adGroup'
+        ? adSetName || campName
+        : adName || adSetName || campName;
+
+    const entityId =
+      level === 'adGroup' ? adGroupId : level === 'ad' ? adId : undefined;
+
+    const costPerCheckout =
+      checkoutsInitiated > 0
+        ? Number((agg.totalSpend / checkoutsInitiated).toFixed(2))
+        : 0;
+    const checkoutToPurchaseRate =
+      checkoutsInitiated > 0
+        ? Number(((agg.totalPurchases / checkoutsInitiated) * 100).toFixed(1))
+        : 0;
+
+    rows.push({
+      key,
+      level,
+      primaryName,
+      entityId,
+      campaignType,
+      campaignName: campName,
+      adSetName,
+      adGroupId,
+      adName,
+      adId,
+      platform: first.platform,
+      startDate: agg.startDate,
+      endDate: agg.endDate,
+      spend: agg.totalSpend,
+      revenue: agg.totalRevenue,
+      purchases: agg.totalPurchases,
+      impressions: agg.totalImpressions,
+      clicks: agg.totalClicks,
+      pageViews: Math.round(pageViews),
+      addToCart: agg.totalAddToCart,
+      checkoutsInitiated: Math.round(checkoutsInitiated),
+      roas: agg.roas,
+      cpa: agg.cpa,
+      ctr: agg.ctr,
+      cpc: agg.cpc,
+      cpm: agg.cpm,
+      costPerAddToCart: agg.costPerAddToCart,
+      costPerCheckout,
+      checkoutToPurchaseRate,
+    });
+  }
+
+  return rows.sort((a, b) => b.spend - a.spend);
+}
