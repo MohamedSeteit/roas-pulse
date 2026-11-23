@@ -8,7 +8,8 @@ import type {
   ReportCustomizationSettings,
   MonthlyTrendPoint,
 } from '../types/campaign';
-import { PLATFORM_NAMES_AR } from '../utils/adMetrics';
+import { PLATFORM_NAMES_AR, PLATFORM_NAMES_EN } from '../utils/adMetrics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface PrintReportModalProps {
   isOpen: boolean;
@@ -32,10 +33,11 @@ interface PdfChartRow {
   roas: number;
 }
 
-const SpendSalesSvgChart: React.FC<{ rows: PdfChartRow[]; currency: string }> = ({
-  rows,
-  currency,
-}) => {
+const SpendSalesSvgChart: React.FC<{
+  rows: PdfChartRow[];
+  currency: string;
+  isEn: boolean;
+}> = ({ rows, currency, isEn }) => {
   if (rows.length === 0) return null;
   const maxVal = Math.max(1, ...rows.flatMap((r) => [r.spend, r.revenue]));
   const width = 460;
@@ -53,16 +55,18 @@ const SpendSalesSvgChart: React.FC<{ rows: PdfChartRow[]; currency: string }> = 
     <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2 print-section">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-slate-900">
-          مخطط المصروف مقابل المبيعات ({currency})
+          {isEn
+            ? `Spend vs. Sales Chart (${currency})`
+            : `مخطط المصروف مقابل المبيعات (${currency})`}
         </h4>
         <div className="flex items-center gap-3 text-[10px] font-semibold">
           <span className="inline-flex items-center gap-1 text-slate-700">
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#4f46e5' }} />
-            المصروف
+            {isEn ? 'Spend' : 'المصروف'}
           </span>
           <span className="inline-flex items-center gap-1 text-emerald-700">
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#10b981' }} />
-            المبيعات
+            {isEn ? 'Sales' : 'المبيعات'}
           </span>
         </div>
       </div>
@@ -71,7 +75,7 @@ const SpendSalesSvgChart: React.FC<{ rows: PdfChartRow[]; currency: string }> = 
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-auto overflow-visible"
         role="img"
-        aria-label="رسم بياني للمصروف والمبيعات"
+        aria-label={isEn ? 'Spend vs Sales Chart' : 'رسم بياني للمصروف والمبيعات'}
       >
         {[0, 0.25, 0.5, 0.75, 1].map((t, idx) => {
           const y = padTop + chartH * (1 - t);
@@ -166,10 +170,11 @@ const SpendSalesSvgChart: React.FC<{ rows: PdfChartRow[]; currency: string }> = 
   );
 };
 
-const RoasSvgChart: React.FC<{ rows: PdfChartRow[]; targetRoas: number }> = ({
-  rows,
-  targetRoas,
-}) => {
+const RoasSvgChart: React.FC<{
+  rows: PdfChartRow[];
+  targetRoas: number;
+  isEn: boolean;
+}> = ({ rows, targetRoas, isEn }) => {
   if (rows.length === 0) return null;
   const maxRoas = Math.max(targetRoas * 1.2, ...rows.map((r) => r.roas), 1);
   const width = 460;
@@ -188,14 +193,16 @@ const RoasSvgChart: React.FC<{ rows: PdfChartRow[]; targetRoas: number }> = ({
     <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2 print-section">
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-bold text-slate-900">
-          مخطط العائد على الإنفاق (ROAS)
+          {isEn ? 'Return on Ad Spend (ROAS) Chart' : 'مخطط العائد على الإنفاق (ROAS)'}
         </h4>
         <div className="flex items-center gap-3 text-[10px] font-semibold">
           <span className="inline-flex items-center gap-1 text-indigo-700">
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#6366f1' }} />
-            العائد المحقق (x)
+            {isEn ? 'Actual ROAS (x)' : 'العائد المحقق (x)'}
           </span>
-          <span className="text-amber-700">--- المستهدف ({targetRoas}x)</span>
+          <span className="text-amber-700">
+            --- {isEn ? `Target (${targetRoas}x)` : `المستهدف (${targetRoas}x)`}
+          </span>
         </div>
       </div>
 
@@ -203,7 +210,7 @@ const RoasSvgChart: React.FC<{ rows: PdfChartRow[]; targetRoas: number }> = ({
         viewBox={`0 0 ${width} ${height}`}
         className="w-full h-auto overflow-visible"
         role="img"
-        aria-label="رسم بياني للعائد على الإنفاق ROAS"
+        aria-label={isEn ? 'ROAS Chart' : 'رسم بياني للعائد على الإنفاق ROAS'}
       >
         {[0, 0.25, 0.5, 0.75, 1].map((t, idx) => {
           const y = padTop + chartH * (1 - t);
@@ -301,6 +308,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
   activeMonthLabel,
   monthlySeries = [],
 }) => {
+  const { isEn } = useLanguage();
   const [chartScope, setChartScope] = useState<'platforms' | 'months'>('platforms');
   const [pageOrientation, setPageOrientation] = useState<'landscape' | 'portrait'>('landscape');
 
@@ -310,16 +318,28 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     window.print();
   };
 
+  const platformNames = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
+
   const platformChartRows: PdfChartRow[] = platforms.map((p) => ({
     label:
       p.platform === 'snapchat'
-        ? 'سناب شات'
+        ? isEn
+          ? 'Snapchat'
+          : 'سناب شات'
         : p.platform === 'tiktok'
-        ? 'تيك توك'
+        ? isEn
+          ? 'TikTok'
+          : 'تيك توك'
         : p.platform === 'meta'
-        ? 'ميتا'
+        ? isEn
+          ? 'Meta'
+          : 'ميتا'
         : p.platform === 'google'
-        ? 'جوجل'
+        ? isEn
+          ? 'Google'
+          : 'جوجل'
+        : isEn
+        ? 'Other'
         : 'أخرى',
     spend: p.totalSpend,
     revenue: p.totalRevenue,
@@ -342,7 +362,8 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="معاينة التقرير التنفيذي للطباعة و PDF"
+      aria-label={isEn ? 'Executive Report PDF & Print Preview' : 'معاينة التقرير التنفيذي للطباعة و PDF'}
+      dir={isEn ? 'ltr' : 'rtl'}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200 print-modal-backdrop"
     >
       {/* Dynamic A4 Print Page Size & Margins */}
@@ -364,7 +385,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 no-print">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-              معاينة التقرير التنفيذي (A4)
+              {isEn ? 'Executive Report Preview (A4)' : 'معاينة التقرير التنفيذي (A4)'}
             </span>
 
             {/* A4 Orientation Switcher */}
@@ -379,7 +400,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 }`}
               >
                 <RectangleHorizontal className="w-3.5 h-3.5" />
-                <span>A4 عرضي (Landscape)</span>
+                <span>{isEn ? 'A4 Landscape' : 'A4 عرضي (Landscape)'}</span>
               </button>
               <button
                 type="button"
@@ -391,7 +412,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                 }`}
               >
                 <RectangleVertical className="w-3.5 h-3.5" />
-                <span>A4 طولي (Portrait)</span>
+                <span>{isEn ? 'A4 Portrait' : 'A4 طولي (Portrait)'}</span>
               </button>
             </div>
 
@@ -404,7 +425,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     chartScope === 'platforms' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
                   }`}
                 >
-                  رسوم المنصات
+                  {isEn ? 'Channel Charts' : 'رسوم المنصات'}
                 </button>
                 <button
                   type="button"
@@ -413,7 +434,7 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                     chartScope === 'months' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600'
                   }`}
                 >
-                  رسوم شهر بعد شهر
+                  {isEn ? 'Month-over-Month Charts' : 'رسوم شهر بعد شهر'}
                 </button>
               </div>
             )}
@@ -426,11 +447,11 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>طباعة / حفظ كـ PDF</span>
+              <span>{isEn ? 'Print / Save as PDF' : 'طباعة / حفظ كـ PDF'}</span>
             </button>
             <button
               type="button"
-              aria-label="إغلاق معاينة التقرير"
+              aria-label={isEn ? 'Close report preview' : 'إغلاق معاينة التقرير'}
               onClick={onClose}
               className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
             >
@@ -454,26 +475,41 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   </h1>
                   <p className="text-xs text-slate-500 font-medium">
                     {reportSettings.brandName}
-                    {clientName ? ` • العميل: ${clientName}` : ''}
-                    {activeMonthLabel ? ` • شهر: ${activeMonthLabel}` : ''}
+                    {clientName
+                      ? isEn
+                        ? ` • Client: ${clientName}`
+                        : ` • العميل: ${clientName}`
+                      : ''}
+                    {activeMonthLabel
+                      ? isEn
+                        ? ` • Period: ${activeMonthLabel}`
+                        : ` • شهر: ${activeMonthLabel}`
+                      : ''}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="text-left text-xs space-y-1">
+            <div className={`${isEn ? 'text-right' : 'text-left'} text-xs space-y-1`}>
               <p className="text-slate-500">
-                الفترة المحللة:{' '}
+                {isEn ? 'Analyzed Period: ' : 'الفترة المحللة: '}
                 <strong className="text-slate-800">
-                  {dateRange.start || 'البداية'} إلى {dateRange.end || 'اليوم'}
+                  {dateRange.start || (isEn ? 'Start' : 'البداية')}{' '}
+                  {isEn ? 'to' : 'إلى'}{' '}
+                  {dateRange.end || (isEn ? 'Today' : 'اليوم')}
                 </strong>
               </p>
               <p className="text-slate-500">
-                تاريخ الإصدار:{' '}
-                <strong className="text-slate-800">{new Date().toLocaleDateString('ar-SA')}</strong>
+                {isEn ? 'Issue Date: ' : 'تاريخ الإصدار: '}
+                <strong className="text-slate-800">
+                  {new Date().toLocaleDateString(isEn ? 'en-US' : 'ar-SA')}
+                </strong>
               </p>
               <p className="text-slate-500">
-                إجمالي الحملات: <strong className="text-slate-800">{campaigns.length} حملة</strong>
+                {isEn ? 'Total Campaigns: ' : 'إجمالي الحملات: '}
+                <strong className="text-slate-800">
+                  {campaigns.length} {isEn ? 'campaigns' : 'حملة'}
+                </strong>
               </p>
             </div>
           </div>
@@ -483,65 +519,82 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             <div className="space-y-3 print-section">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-xs text-slate-500 block">إجمالي المصروف</span>
+                  <span className="text-xs text-slate-500 block">
+                    {isEn ? 'Total Ad Spend' : 'إجمالي المصروف'}
+                  </span>
                   <p className="text-xl font-black text-slate-900 mt-1">
                     {metrics.totalSpend.toLocaleString()} {currency}
                   </p>
-                  <span className="text-[11px] text-slate-400">ميزانية الحملات</span>
+                  <span className="text-[11px] text-slate-400">
+                    {isEn ? 'Campaigns Budget' : 'ميزانية الحملات'}
+                  </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-xs text-slate-500 block">إجمالي المبيعات</span>
+                  <span className="text-xs text-slate-500 block">
+                    {isEn ? 'Total Revenue' : 'إجمالي المبيعات'}
+                  </span>
                   <p className="text-xl font-black text-emerald-700 mt-1">
                     {metrics.totalRevenue.toLocaleString()} {currency}
                   </p>
                   <span className="text-[11px] text-slate-400">
-                    صافي: {metrics.netProfitEstimate.toLocaleString()} {currency}
+                    {isEn ? 'Net:' : 'صافي:'} {metrics.netProfitEstimate.toLocaleString()} {currency}
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200">
                   <span className="text-xs text-indigo-700 font-semibold block">
-                    العائد على الإنفاق (ROAS)
+                    {isEn ? 'Return on Ad Spend (ROAS)' : 'العائد على الإنفاق (ROAS)'}
                   </span>
                   <p className="text-2xl font-black text-indigo-900 mt-1">{metrics.roas}x</p>
                   <span className="text-[11px] text-indigo-600 font-medium">
-                    المستهدف: {reportSettings.targetRoas}x
+                    {isEn ? 'Target:' : 'المستهدف:'} {reportSettings.targetRoas}x
                   </span>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-xs text-slate-500 block">ثمن البيعة (CPA)</span>
+                  <span className="text-xs text-slate-500 block">
+                    {isEn ? 'Cost Per Acquisition (CPA)' : 'ثمن البيعة (CPA)'}
+                  </span>
                   <p className="text-xl font-black text-slate-900 mt-1">
                     {metrics.cpa} {currency}
                   </p>
                   <span className="text-[11px] text-slate-400">
-                    عبر {metrics.totalPurchases.toLocaleString()} طلب
+                    {isEn
+                      ? `Across ${metrics.totalPurchases.toLocaleString()} orders`
+                      : `عبر ${metrics.totalPurchases.toLocaleString()} طلب`}
                   </span>
                 </div>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div>
-                  <span className="text-slate-500 font-medium">الانتشار والوصول الإجمالي:</span>
-                  <strong className="text-slate-900 mr-2 text-sm">
-                    {metrics.totalImpressions.toLocaleString()} ظهور
+                  <span className="text-slate-500 font-medium">
+                    {isEn ? 'Total Reach & Impressions:' : 'الانتشار والوصول الإجمالي:'}
+                  </span>
+                  <strong className={`text-slate-900 ${isEn ? 'ml-2' : 'mr-2'} text-sm`}>
+                    {metrics.totalImpressions.toLocaleString()} {isEn ? 'impressions' : 'ظهور'}
                   </strong>
                 </div>
                 <div className="flex flex-wrap gap-4">
                   {metrics.totalAddToCart > 0 && (
                     <span>
-                      الإضافة للسلة:{' '}
+                      {isEn ? 'Add to Cart: ' : 'الإضافة للسلة: '}
                       <strong>
-                        {metrics.totalAddToCart.toLocaleString()} سلة ({metrics.costPerAddToCart} {currency}/سلة)
+                        {metrics.totalAddToCart.toLocaleString()} {isEn ? 'carts' : 'سلة'} (
+                        {metrics.costPerAddToCart} {currency}/{isEn ? 'cart' : 'سلة'})
                       </strong>
                     </span>
                   )}
                   <span>
-                    نسبة النقر للظهور (CTR): <strong>{metrics.ctr}%</strong>
+                    {isEn ? 'Click-Through Rate (CTR): ' : 'نسبة النقر للظهور (CTR): '}
+                    <strong>{metrics.ctr}%</strong>
                   </span>
                   <span>
-                    متوسط السلة (AOV): <strong>{metrics.aov} {currency}</strong>
+                    {isEn ? 'Avg. Order Value (AOV): ' : 'متوسط السلة (AOV): '}
+                    <strong>
+                      {metrics.aov} {currency}
+                    </strong>
                   </span>
                 </div>
               </div>
@@ -554,7 +607,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <div className="flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-700" />
                 <h3 className="font-bold text-sm text-slate-900">
-                  الرسوم البيانية للأداء المالي (المصروف • المبيعات • العائد)
+                  {isEn
+                    ? 'Financial Performance Charts (Spend • Sales • ROAS)'
+                    : 'الرسوم البيانية للأداء المالي (المصروف • المبيعات • العائد)'}
                 </h3>
               </div>
 
@@ -563,8 +618,12 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
                   pageOrientation === 'landscape' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'
                 } gap-4`}
               >
-                <SpendSalesSvgChart rows={activeChartRows} currency={currency} />
-                <RoasSvgChart rows={activeChartRows} targetRoas={reportSettings.targetRoas} />
+                <SpendSalesSvgChart rows={activeChartRows} currency={currency} isEn={isEn} />
+                <RoasSvgChart
+                  rows={activeChartRows}
+                  targetRoas={reportSettings.targetRoas}
+                  isEn={isEn}
+                />
               </div>
             </div>
           )}
@@ -573,27 +632,29 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {reportSettings.visibleSections.platforms && (
             <div className="space-y-2 print-section">
               <h3 className="font-bold text-sm text-slate-900">
-                جدول مقارنة المنصات الإعلانية (سناب شات • تيك توك • ميتا • جوجل)
+                {isEn
+                  ? 'Ad Channels Comparison Table (Snapchat • TikTok • Meta • Google)'
+                  : 'جدول مقارنة المنصات الإعلانية (سناب شات • تيك توك • ميتا • جوجل)'}
               </h3>
               <div className="border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-right text-xs">
+                <table className={`w-full ${isEn ? 'text-left' : 'text-right'} text-xs`}>
                   <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">المنصة الإعلانية</th>
-                      <th className="p-2.5">المصروف</th>
-                      <th className="p-2.5">حصة الصرف</th>
-                      <th className="p-2.5">المبيعات</th>
-                      <th className="p-2.5">حصة المبيعات</th>
-                      <th className="p-2.5">العائد (ROAS)</th>
-                      <th className="p-2.5">ثمن البيعة (CPA)</th>
-                      <th className="p-2.5">الطلبات</th>
+                      <th className="p-2.5">{isEn ? 'Ad Channel' : 'المنصة الإعلانية'}</th>
+                      <th className="p-2.5">{isEn ? 'Spend' : 'المصروف'}</th>
+                      <th className="p-2.5">{isEn ? 'Spend Share' : 'حصة الصرف'}</th>
+                      <th className="p-2.5">{isEn ? 'Sales' : 'المبيعات'}</th>
+                      <th className="p-2.5">{isEn ? 'Sales Share' : 'حصة المبيعات'}</th>
+                      <th className="p-2.5">ROAS</th>
+                      <th className="p-2.5">CPA</th>
+                      <th className="p-2.5">{isEn ? 'Orders' : 'الطلبات'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800">
                     {platforms.map((p) => (
                       <tr key={p.platform}>
                         <td className="p-2.5 font-bold">
-                          {PLATFORM_NAMES_AR[p.platform] || p.platform}
+                          {platformNames[p.platform] || p.platform}
                         </td>
                         <td className="p-2.5">
                           {p.totalSpend.toLocaleString()} {currency}
@@ -619,7 +680,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
           {/* Top 3 Winning and Bottom Campaigns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs print-section">
             <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/40">
-              <h4 className="font-bold text-emerald-900 mb-2">أعلى 3 حملات في العائد (ROAS):</h4>
+              <h4 className="font-bold text-emerald-900 mb-2">
+                {isEn ? 'Top 3 Campaigns by ROAS:' : 'أعلى 3 حملات في العائد (ROAS):'}
+              </h4>
               <div className="space-y-1.5">
                 {[...campaigns]
                   .sort((a, b) => b.roas - a.roas)
@@ -636,7 +699,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
             </div>
 
             <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/40">
-              <h4 className="font-bold text-rose-900 mb-2">أعلى 3 حملات في تكلفة البيعة (CPA):</h4>
+              <h4 className="font-bold text-rose-900 mb-2">
+                {isEn ? 'Highest 3 Campaigns by CPA:' : 'أعلى 3 حملات في تكلفة البيعة (CPA):'}
+              </h4>
               <div className="space-y-1.5">
                 {[...campaigns]
                   .filter((c) => c.purchases > 0)
@@ -660,25 +725,35 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               <div className="flex items-center gap-2">
                 <Award className="w-5 h-5 text-indigo-700" />
                 <h3 className="font-bold text-sm text-indigo-950">
-                  التعليق التنفيذي لتحسين الأداء (Executive Performance Commentary)
+                  {isEn
+                    ? 'Executive Performance Commentary'
+                    : 'التعليق التنفيذي لتحسين الأداء (Executive Performance Commentary)'}
                 </h3>
               </div>
 
               {reportSettings.executiveNote && (
                 <div className="p-3 rounded-lg bg-white border border-indigo-200 text-xs text-slate-800">
-                  <strong className="text-indigo-900 block mb-0.5">ملاحظة مدير الحساب للعميل:</strong>
+                  <strong className="text-indigo-900 block mb-0.5">
+                    {isEn ? 'Account Manager Note:' : 'ملاحظة مدير الحساب للعميل:'}
+                  </strong>
                   <p>{reportSettings.executiveNote}</p>
                 </div>
               )}
 
               <p className="text-xs text-slate-800 leading-relaxed">
                 {analysis?.executiveSummary ||
-                  `حققت الحملات خلال الفترة مبيعات إجمالية بقيمة ${metrics.totalRevenue.toLocaleString()} ${currency} بمصروف قدره ${metrics.totalSpend.toLocaleString()} ${currency}، مما نتج عنه عائد إجمالي على الإنفاق قدره ${metrics.roas}x وتكلفة بيعة بلغت ${metrics.cpa} ${currency}. يوصى بتركيز الميزانيات على المنصات الأكثر كفاءة وخفض الصرف على الحملات المتعثرة.`}
+                  (isEn
+                    ? `Campaigns generated ${metrics.totalRevenue.toLocaleString()} ${currency} in total sales on ${metrics.totalSpend.toLocaleString()} ${currency} ad spend, achieving an overall ${metrics.roas}x ROAS and ${metrics.cpa} ${currency} CPA. Focusing budgets on top-performing channels while trimming underperforming campaigns is recommended.`
+                    : `حققت الحملات خلال الفترة مبيعات إجمالية بقيمة ${metrics.totalRevenue.toLocaleString()} ${currency} بمصروف قدره ${metrics.totalSpend.toLocaleString()} ${currency}، مما نتج عنه عائد إجمالي على الإنفاق قدره ${metrics.roas}x وتكلفة بيعة بلغت ${metrics.cpa} ${currency}. يوصى بتركيز الميزانيات على المنصات الأكثر كفاءة وخفض الصرف على الحملات المتعثرة.`)}
               </p>
 
               {analysis?.historicalComparison?.trendVsPreviousMonths && (
                 <p className="text-xs text-indigo-900/90 leading-relaxed pt-1 border-t border-indigo-200/50">
-                  <strong>المقارنة التاريخية (شهر بعد شهر): </strong>
+                  <strong>
+                    {isEn
+                      ? 'Historical Comparison (Month-over-Month): '
+                      : 'المقارنة التاريخية (شهر بعد شهر): '}
+                  </strong>
                   {analysis.historicalComparison.trendVsPreviousMonths}
                 </p>
               )}
@@ -686,9 +761,15 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
               {analysis?.actionableRecommendations && (
                 <div className="pt-2 border-t border-indigo-200/60">
                   <span className="text-[11px] font-bold text-indigo-900 block mb-1">
-                    أهم الإجراءات العملية الفورية للتحسين:
+                    {isEn
+                      ? 'Immediate Actionable Optimization Steps:'
+                      : 'أهم الإجراءات العملية الفورية للتحسين:'}
                   </span>
-                  <ul className="text-xs text-slate-700 space-y-1 list-disc pr-4">
+                  <ul
+                    className={`text-xs text-slate-700 space-y-1 list-disc ${
+                      isEn ? 'pl-4' : 'pr-4'
+                    }`}
+                  >
                     {analysis.actionableRecommendations.slice(0, 4).map((rec, i) => (
                       <li key={i}>{rec}</li>
                     ))}
@@ -700,7 +781,9 @@ export const PrintReportModal: React.FC<PrintReportModalProps> = ({
 
           {/* Footer */}
           <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 print-section">
-            تم استخراج هذا التقرير آلياً بواسطة نظام {reportSettings.brandName || 'ROAS Pulse'} لتحليل الحملات الإعلانية.
+            {isEn
+              ? `Automatically generated by ${reportSettings.brandName || 'ROAS Pulse'} Ad Analytics & ROAS Intelligence.`
+              : `تم استخراج هذا التقرير آلياً بواسطة نظام ${reportSettings.brandName || 'ROAS Pulse'} لتحليل الحملات الإعلانية.`}
           </div>
         </div>
       </div>
