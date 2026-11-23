@@ -51,6 +51,7 @@ import {
 
 const TOKEN_STORAGE_KEY = 'roas_pulse_session_token';
 const THEME_STORAGE_KEY = 'roas_pulse_theme_mode';
+const [isTemplateGuideOpen, setIsTemplateGuideOpen] = useState(false);
 
 function resolveLegalRoute(pathname: string): LegalPageRoute | null {
   const clean = decodeURIComponent(pathname).toLowerCase().replace(/\/+$/, '');
