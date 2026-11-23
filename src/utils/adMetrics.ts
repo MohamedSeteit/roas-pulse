@@ -1311,12 +1311,14 @@ export function calculateAdBreakdown(campaigns: CampaignData[]): AdBreakdownItem
 export function getPerformanceTier(roas: number, cpa: number, avgCpa: number): {
   tier: PerformanceTier;
   labelAr: string;
+  labelEn: string;
   badgeColor: string;
 } {
   if (roas >= 4.0 && (avgCpa === 0 || cpa <= avgCpa)) {
     return {
       tier: 'exceptional',
       labelAr: 'أداء استثنائي (Scale Up)',
+      labelEn: 'Exceptional (Scale Up)',
       badgeColor: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
     };
   }
@@ -1324,6 +1326,7 @@ export function getPerformanceTier(roas: number, cpa: number, avgCpa: number): {
     return {
       tier: 'good',
       labelAr: 'أداء قوي وناجح',
+      labelEn: 'Strong & Profitable',
       badgeColor: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
     };
   }
@@ -1331,12 +1334,14 @@ export function getPerformanceTier(roas: number, cpa: number, avgCpa: number): {
     return {
       tier: 'average',
       labelAr: 'متوسط يحتاج تحسين',
+      labelEn: 'Needs Optimization',
       badgeColor: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
     };
   }
   return {
     tier: 'poor',
     labelAr: 'مهدور / أوقف الحملة',
+    labelEn: 'Bleeding / Pause',
     badgeColor: 'bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30',
   };
 }
