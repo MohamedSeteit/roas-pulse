@@ -253,19 +253,22 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
     }
   };
 
-  const handleDownloadSample = () => {
-    const sample = generateSampleCSVString();
+  const handleDownloadSample = (lang: 'ar' | 'en' = isEn ? 'en' : 'ar') => {
+    const sample = generateSampleCSVString(lang);
     const blob = new Blob(['\ufeff' + sample], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute(
       'download',
-      isEn ? 'ROAS_Campaigns_Sample_Template.csv' : 'نموذج_حملات_اعلانية_ROAS.csv'
+      lang === 'en'
+        ? 'ROAS_Campaigns_Sample_Template_EN.csv'
+        : 'نموذج_حملات_اعلانية_عربي_ROAS.csv'
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleLoadDailySample = () => {
@@ -629,11 +632,20 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handleDownloadSample}
+              onClick={() => handleDownloadSample('ar')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>{isEn ? 'Download CSV Template' : 'تحميل قالب CSV'}</span>
+              <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>{isEn ? 'Arabic Template (عربي)' : 'قالب CSV عربي'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleDownloadSample('en')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>{isEn ? 'English Template (EN)' : 'قالب CSV إنجليزي'}</span>
             </button>
 
             <button
