@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Sparkles,
   RefreshCw,
@@ -35,9 +35,26 @@ export const AiAnalysisCard: React.FC<AiAnalysisCardProps> = ({
   historicalMonthsCount = 0,
   clientName,
 }) => {
-  const { isEn } = useLanguage();
+  const { isEn, lang } = useLanguage();
   const [activeTab, setActiveTab] = useState<'summary' | 'daily' | 'platforms' | 'cpa' | 'budget' | 'actions'>('summary');
   const [copied, setCopied] = useState(false);
+  const prevLangRef = useRef(lang);
+
+  // Automatically re-run AI analysis if language switches while a report is already displayed
+  useEffect(() => {
+    if (prevLangRef.current !== lang) {
+      prevLangRef.current = lang;
+      if (analysis && !isLoading && campaigns.length > 0) {
+        onRunAnalysis();
+      }
+    }
+  }, [lang, analysis, isLoading, campaigns.length, onRunAnalysis]);
+
+  const formatPlatformLabel = (rawPlatform: string) => {
+    const key = rawPlatform.toLowerCase().trim() as AdPlatform;
+    const nameMap = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
+    return nameMap[key] || rawPlatform;
+  };
 
   const handleCopy = () => {
     if (!analysis) return;
@@ -132,7 +149,7 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                   : 'تقرير واستشارات الذكاء الاصطناعي (AI Campaign Intelligence)'}
               </h2>
               <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                {analysis?.aiModelLabel || 'Gemini 4 Hydrogen'}
+                {analysis?.aiModelLabel || 'Gemini 2.5 Flash'}
               </span>
               {historicalMonthsCount > 0 && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
@@ -406,7 +423,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                               {badge.label}
                             </span>
                           </div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">{item.platform}</span>
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
+                            {formatPlatformLabel(item.platform)}
+                          </span>
                           <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{item.reason}</p>
                         </div>
                       );
@@ -421,8 +440,7 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           {activeTab === 'platforms' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in duration-200">
               {analysis.platformHighlights.map((ph, idx) => {
-                const nameMap = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
-                const name = nameMap[ph.platform as AdPlatform] || ph.platform;
+                const name = formatPlatformLabel(ph.platform);
                 return (
                   <div
                     key={idx}
@@ -535,11 +553,15 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold">
-                          {isEn ? `Pull from: ${plan.fromPlatform}` : `سحب من: ${plan.fromPlatform}`}
+                          {isEn
+                            ? `Pull from: ${formatPlatformLabel(plan.fromPlatform)}`
+                            : `سحب من: ${formatPlatformLabel(plan.fromPlatform)}`}
                         </span>
                         <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
                         <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
-                          {isEn ? `Shift to: ${plan.toPlatform}` : `تحويل إلى: ${plan.toPlatform}`}
+                          {isEn
+                            ? `Shift to: ${formatPlatformLabel(plan.toPlatform)}`
+                            : `تحويل إلى: ${formatPlatformLabel(plan.toPlatform)}`}
                         </span>
                       </div>
                       <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded border border-indigo-500/30">
