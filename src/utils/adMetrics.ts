@@ -9,7 +9,7 @@ import type {
   AdBreakdownItem,
   ReportParseMeta,
   AIAnalysisResult,
-} from '../types/campaign.ts';
+} from '../types/campaign';
 import Papa from 'papaparse';
 
 /**
@@ -565,7 +565,6 @@ export function parseCampaignCSV(
         norm === 'التكلفه' ||
         norm.includes('التكلفهالاجماليه'))
     ) {
-      // Prefer explicit "Amount spent" / "Cost" over generic matches
       const isStrongSpend =
         norm.includes('amountspent') ||
         norm === 'cost' ||
@@ -836,7 +835,13 @@ export function parseCampaignCSV(
     const adGroupId = headerMap.adGroupId ? String(row[headerMap.adGroupId] || '').trim() || undefined : undefined;
     const adId = headerMap.adId ? String(row[headerMap.adId] || '').trim() || undefined : undefined;
 
-    const roas = spend > 0 ? Number((revenue / spend).toFixed(2)) : revenue > 0 ? 99 : 0;
+    let roas = 0;
+    if (spend > 0) {
+      roas = Number((revenue / spend).toFixed(2));
+    } else if (revenue > 0) {
+      roas = 99;
+    }
+
     const cpa = purchases > 0 ? Number((spend / purchases).toFixed(2)) : spend;
     const ctr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
     const cpc = clicks > 0 ? Number((spend / clicks).toFixed(2)) : 0;
@@ -878,12 +883,12 @@ export function parseCampaignCSV(
   });
 
   const uniquePlatforms = Array.from(new Set(results.map((r) => r.platform)));
-  const detectedPlatform: AdPlatform | 'mixed' | 'unknown' =
-    uniquePlatforms.length > 1
-      ? 'mixed'
-      : uniquePlatforms.length === 1
-      ? uniquePlatforms[0]
-      : inferredFilePlatform;
+  let detectedPlatform: AdPlatform | 'mixed' | 'unknown' = inferredFilePlatform;
+  if (uniquePlatforms.length > 1) {
+    detectedPlatform = 'mixed';
+  } else if (uniquePlatforms.length === 1) {
+    detectedPlatform = uniquePlatforms[0];
+  }
 
   return {
     data: results,
@@ -1486,9 +1491,10 @@ export function generatePlatformExactTemplateCSV(
       );
   }
 }
+
 /**
  * Rule-based fallback marketing analyst that produces structured AI-like report
- * including Day-by-Day & Ad-level insights in Arabic or English if Gemini API key is missing or offline.
+ * including Day-by-Day & Ad-level insights if Gemini API key is missing or offline.
  */
 export function generateRuleBasedAnalysis(
   campaigns: CampaignData[],
@@ -1576,14 +1582,12 @@ export function generateRuleBasedAnalysis(
     });
   }
 
-  const periodText =
-    overall.startDate && overall.endDate
-      ? isEn
-        ? `during the period from ${overall.startDate} to ${overall.endDate}`
-        : `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`
-      : isEn
-      ? 'during the selected reporting period'
-      : 'خلال الفترة الزمنية المحددة في الملف';
+  let periodText = isEn ? 'during the selected reporting period' : 'خلال الفترة الزمنية المحددة في الملف';
+  if (overall.startDate && overall.endDate) {
+    periodText = isEn
+      ? `during the period from ${overall.startDate} to ${overall.endDate}`
+      : `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`;
+  }
 
   const fatigueWarnings: string[] = [];
   if (dailySummary.fatigueAlert) {
@@ -1634,46 +1638,62 @@ export function generateRuleBasedAnalysis(
     };
   });
 
-  const bestDayMsg = dailySummary.bestDay
-    ? isEn
-      ? `Best-performing day was ${dailySummary.bestDay.date} with ${dailySummary.bestDay.revenue.toLocaleString()} revenue and ${dailySummary.bestDay.roas}x ROAS.`
-      : `أفضل يوم أداءً كان ${dailySummary.bestDay.date} بمبيعات ${dailySummary.bestDay.revenue.toLocaleString()} ر.س وعائد ${dailySummary.bestDay.roas}x.`
-    : isEn
+  let bestDayMsg = isEn
     ? 'Insufficient daily breakdown data to pinpoint a single peak day.'
     : 'لم تتوفر بيانات يومية كافية لتحديد أفضل يوم.';
+  if (dailySummary.bestDay) {
+    bestDayMsg = isEn
+      ? `Best-performing day was ${dailySummary.bestDay.date} with ${dailySummary.bestDay.revenue.toLocaleString()} revenue and ${dailySummary.bestDay.roas}x ROAS.`
+      : `أفضل يوم أداءً كان ${dailySummary.bestDay.date} بمبيعات ${dailySummary.bestDay.revenue.toLocaleString()} ر.س وعائد ${dailySummary.bestDay.roas}x.`;
+  }
+
+  let trendDirectionTextAr = 'مستقر نسبياً';
+  let trendDirectionTextEn = 'relatively stable';
+  if (dailySummary.trendDirection === 'improving') {
+    trendDirectionTextAr = 'في تحسن مستمر';
+    trendDirectionTextEn = 'steadily improving';
+  } else if (dailySummary.trendDirection === 'declining') {
+    trendDirectionTextAr = 'يشهد تراجعاً يتطلب تدخلاً';
+    trendDirectionTextEn = 'declining and requires intervention';
+  }
+
+  let trendSummaryText = '';
+  if (dailySummary.hasExactDailyData) {
+    trendSummaryText = isEn
+      ? `Analyzed ${days.length} actual days day-by-day. Overall trajectory is ${trendDirectionTextEn}.`
+      : `تم تحليل ${days.length} يوم فعلي يوم بيوم. اتجاه الأداء العام ${trendDirectionTextAr}.`;
+  } else {
+    trendSummaryText = isEn
+      ? `Uploaded data is aggregated at the period level; ${bestDayMsg} Export reports broken down "By Day" for sharper daily pacing insights.`
+      : `البيانات المرفوعة مجمعة على مستوى الفترة؛ ${bestDayMsg} لرفع دقة التوصيات اليومية، يُنصح بتصدير التقرير مقسماً يوم بيوم (By Day / Day).`;
+  }
+
+  let cpaStatus = '';
+  if (isEn) {
+    if (overall.cpa <= 15) cpaStatus = 'Excellent & Highly Efficient';
+    else if (overall.cpa <= 60) cpaStatus = 'Healthy & On Target';
+    else cpaStatus = 'Elevated — Needs Optimization';
+  } else {
+    if (overall.cpa <= 15) cpaStatus = 'ممتاز واقتصادي جداً';
+    else if (overall.cpa <= 60) cpaStatus = 'صحي وضمن المستهدف';
+    else cpaStatus = 'مرتفع يحتاج ترشيد';
+  }
+
+  const addToCartSnippetEn =
+    overall.totalAddToCart > 0 ? ` and ${overall.totalAddToCart.toLocaleString()} add-to-carts` : '';
+  const addToCartSnippetAr =
+    overall.totalAddToCart > 0 ? ` و${overall.totalAddToCart.toLocaleString()} إضافة للسلة` : '';
 
   return {
     executiveSummary: isEn
-      ? `Campaign analysis ${periodText} generated ${overall.totalRevenue.toLocaleString()} in total revenue from ${overall.totalSpend.toLocaleString()} in ad spend, achieving ${overall.roas}x ROAS and ${overall.cpa} CPA across ${overall.totalPurchases} orders${
-          overall.totalAddToCart > 0 ? ` and ${overall.totalAddToCart.toLocaleString()} add-to-carts` : ''
-        }. ${topPlatformLabel} leads overall conversion efficiency.`
-      : `أظهرت تحليلات الحملات ${periodText} مبيعات إجمالية بلغت ${overall.totalRevenue.toLocaleString()} ر.س مقابل مصروف إعلاني قدره ${overall.totalSpend.toLocaleString()} ر.س، بعائد على الإنفاق (ROAS) قدره ${overall.roas}x وثمن بيعة (CPA) قدره ${overall.cpa} ر.س عبر ${overall.totalPurchases} طلب${
-          overall.totalAddToCart > 0 ? ` و${overall.totalAddToCart.toLocaleString()} إضافة للسلة` : ''
-        }. تتصدر منصة ${topPlatformLabel} كفاءة التحويل.`,
+      ? `Campaign analysis ${periodText} generated ${overall.totalRevenue.toLocaleString()} in total revenue from ${overall.totalSpend.toLocaleString()} in ad spend, achieving ${overall.roas}x ROAS and ${overall.cpa} CPA across ${overall.totalPurchases} orders${addToCartSnippetEn}. ${topPlatformLabel} leads overall conversion efficiency.`
+      : `أظهرت تحليلات الحملات ${periodText} مبيعات إجمالية بلغت ${overall.totalRevenue.toLocaleString()} ر.س مقابل مصروف إعلاني قدره ${overall.totalSpend.toLocaleString()} ر.س، بعائد على الإنفاق (ROAS) قدره ${overall.roas}x وثمن بيعة (CPA) قدره ${overall.cpa} ر.س عبر ${overall.totalPurchases} طلب${addToCartSnippetAr}. تتصدر منصة ${topPlatformLabel} كفاءة التحويل.`,
     periodAssessment: isEn
       ? `Across ${periodText}, average CTR reached ${overall.ctr}% with an average daily spend of ${dailySummary.avgDailySpend.toLocaleString()} and average daily revenue of ${dailySummary.avgDailyRevenue.toLocaleString()}. ${bestDayMsg}`
       : `${periodText}، بلغت نسبة النقر للظهور (CTR) ${overall.ctr}% بمتوسط صرف يومي ${dailySummary.avgDailySpend.toLocaleString()} ر.س ومتوسط مبيعات يومي ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س. ${bestDayMsg}`,
     platformHighlights,
     dailyInsights: {
-      trendSummary: isEn
-        ? dailySummary.hasExactDailyData
-          ? `Analyzed ${days.length} actual days day-by-day. Overall trajectory is ${
-              dailySummary.trendDirection === 'improving'
-                ? 'steadily improving'
-                : dailySummary.trendDirection === 'declining'
-                ? 'declining and requires intervention'
-                : 'relatively stable'
-            }.`
-          : `Uploaded data is aggregated at the period level; ${bestDayMsg} Export reports broken down "By Day" for sharper daily pacing insights.`
-        : dailySummary.hasExactDailyData
-        ? `تم تحليل ${days.length} يوم فعلي يوم بيوم. اتجاه الأداء العام ${
-            dailySummary.trendDirection === 'improving'
-              ? 'في تحسن مستمر'
-              : dailySummary.trendDirection === 'declining'
-              ? 'يشهد تراجعاً يتطلب تدخلاً'
-              : 'مستقر نسبياً'
-          }.`
-        : `البيانات المرفوعة مجمعة على مستوى الفترة؛ ${bestDayMsg} لرفع دقة التوصيات اليومية، يُنصح بتصدير التقرير مقسماً يوم بيوم (By Day / Day).`,
+      trendSummary: trendSummaryText,
       bestPerformingDays: bestDayMsg,
       fatigueWarnings:
         fatigueWarnings.length > 0
@@ -1689,17 +1709,7 @@ export function generateRuleBasedAnalysis(
     },
     adLevelRecommendations,
     cpaAnalysis: {
-      status: isEn
-        ? overall.cpa <= 15
-          ? 'Excellent & Highly Efficient'
-          : overall.cpa <= 60
-          ? 'Healthy & On Target'
-          : 'Elevated — Needs Optimization'
-        : overall.cpa <= 15
-        ? 'ممتاز واقتصادي جداً'
-        : overall.cpa <= 60
-        ? 'صحي وضمن المستهدف'
-        : 'مرتفع يحتاج ترشيد',
+      status: cpaStatus,
       comment: isEn
         ? `Overall average CPA is ${overall.cpa}. Lowest-cost campaign/ad is "${lowestCpaCampaign}", while highest-cost is "${highestCpaCampaign}".`
         : `متوسط ثمن البيعة العام هو ${overall.cpa} ر.س. أقل حملة/إعلان تكلفة هي "${lowestCpaCampaign}"، بينما الأعلى تكلفة هي "${highestCpaCampaign}".`,
@@ -1845,15 +1855,19 @@ export function buildHierarchyDrilldown(
     const adId = (first as any).adId || undefined;
     const campaignType = (first as any).campaignType || undefined;
 
-    const primaryName =
-      level === 'campaign'
-        ? campName
-        : level === 'adGroup'
-        ? adSetName || campName
-        : adName || adSetName || campName;
+    let primaryName = campName;
+    if (level === 'adGroup') {
+      primaryName = adSetName || campName;
+    } else if (level === 'ad') {
+      primaryName = adName || adSetName || campName;
+    }
 
-    const entityId =
-      level === 'adGroup' ? adGroupId : level === 'ad' ? adId : undefined;
+    let entityId: string | undefined = undefined;
+    if (level === 'adGroup') {
+      entityId = adGroupId;
+    } else if (level === 'ad') {
+      entityId = adId;
+    }
 
     const costPerCheckout =
       checkoutsInitiated > 0
