@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { TrialStatusInfo, UserAccountPublic } from '../types/campaign';
 import { CREEM_PAYMENT_URL } from '../utils/clientAnalytics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AuthSubscriptionModalProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
   onCancelSubscription,
   onNavigate,
 }) => {
+  const { isEn } = useLanguage();
   const [tab, setTab] = useState<'register' | 'login' | 'billing'>(
     user ? 'billing' : initialTab
   );
@@ -73,7 +75,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
       }
       onClose();
     } catch (err: any) {
-      setError(err?.message || 'حدث خطأ، يرجى المحاولة مجدداً.');
+      setError(
+        err?.message || (isEn ? 'An error occurred. Please try again.' : 'حدث خطأ، يرجى المحاولة مجدداً.')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +89,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
     try {
       await onActivateSubscription();
     } catch (err: any) {
-      setError(err?.message || 'تعذر تفعيل الاشتراك.');
+      setError(
+        err?.message || (isEn ? 'Unable to activate subscription.' : 'تعذر تفعيل الاشتراك.')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +103,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
     try {
       await onCancelSubscription();
     } catch (err: any) {
-      setError(err?.message || 'تعذر إلغاء التجديد.');
+      setError(
+        err?.message || (isEn ? 'Unable to cancel auto-renewal.' : 'تعذر إلغاء التجديد.')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +120,8 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="الحساب والاشتراك الشهري"
+      aria-label={isEn ? 'Account & Monthly Subscription' : 'الحساب والاشتراك الشهري'}
+      dir={isEn ? 'ltr' : 'rtl'}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100">
@@ -124,18 +133,33 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                {user ? 'حسابك واشتراك ROAS Pulse' : 'ابدأ شهرك المجاني في ROAS Pulse'}
+                {user
+                  ? isEn
+                    ? 'Your ROAS Pulse Account & Subscription'
+                    : 'حسابك واشتراك ROAS Pulse'
+                  : isEn
+                  ? 'Start Your Free Month on ROAS Pulse'
+                  : 'ابدأ شهرك المجاني في ROAS Pulse'}
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                30 يوماً مجاناً بعد التسجيل بالايميل • ثم اشتراك مرن بقيمة{' '}
-                <strong className="text-emerald-700 dark:text-emerald-300">$2.95 / شهرياً</strong>
+                {isEn ? (
+                  <>
+                    30 days free after email sign-up • Then flexible{' '}
+                    <strong className="text-emerald-700 dark:text-emerald-300">$2.95 / month</strong>
+                  </>
+                ) : (
+                  <>
+                    30 يوماً مجاناً بعد التسجيل بالايميل • ثم اشتراك مرن بقيمة{' '}
+                    <strong className="text-emerald-700 dark:text-emerald-300">$2.95 / شهرياً</strong>
+                  </>
+                )}
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            aria-label="إغلاق"
+            aria-label={isEn ? 'Close' : 'إغلاق'}
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
@@ -159,7 +183,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                تسجيل جديد (شهر مجاني)
+                {isEn ? 'Sign Up (Free Month)' : 'تسجيل جديد (شهر مجاني)'}
               </button>
               <button
                 type="button"
@@ -173,7 +197,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                تسجيل الدخول
+                {isEn ? 'Sign In' : 'تسجيل الدخول'}
               </button>
             </>
           )}
@@ -189,7 +213,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            تفاصيل الباقة ($2.95/شهر)
+            {isEn ? 'Plan Details ($2.95/mo)' : 'تفاصيل الباقة ($2.95/شهر)'}
           </button>
         </div>
 
@@ -206,17 +230,23 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
             {tab === 'register' && (
               <div>
                 <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                  الاسم أو اسم الوكالة
+                  {isEn ? 'Your Name or Agency Name' : 'الاسم أو اسم الوكالة'}
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute right-3 top-2.5" />
+                  <User
+                    className={`w-4 h-4 text-slate-400 dark:text-slate-500 absolute ${
+                      isEn ? 'left-3' : 'right-3'
+                    } top-2.5`}
+                  />
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="أحمد — وكالة نمو الأداء"
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder={isEn ? 'Alex — Growth Performance Agency' : 'أحمد — وكالة نمو الأداء'}
+                    className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl ${
+                      isEn ? 'pl-9 pr-3' : 'pr-9 pl-3'
+                    } py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500`}
                   />
                 </div>
               </div>
@@ -224,17 +254,23 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
 
             <div>
               <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                البريد الإلكتروني
+                {isEn ? 'Email Address' : 'البريد الإلكتروني'}
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute right-3 top-2.5" />
+                <Mail
+                  className={`w-4 h-4 text-slate-400 dark:text-slate-500 absolute ${
+                    isEn ? 'left-3' : 'right-3'
+                  } top-2.5`}
+                />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl ${
+                    isEn ? 'pl-9 pr-3' : 'pr-9 pl-3'
+                  } py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500`}
                   dir="ltr"
                 />
               </div>
@@ -242,10 +278,14 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
 
             <div>
               <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                كلمة المرور (6 أحرف على الأقل)
+                {isEn ? 'Password (at least 6 characters)' : 'كلمة المرور (6 أحرف على الأقل)'}
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute right-3 top-2.5" />
+                <Lock
+                  className={`w-4 h-4 text-slate-400 dark:text-slate-500 absolute ${
+                    isEn ? 'left-3' : 'right-3'
+                  } top-2.5`}
+                />
                 <input
                   type="password"
                   required
@@ -253,7 +293,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl pr-9 pl-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className={`w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl ${
+                    isEn ? 'pl-9 pr-3' : 'pr-9 pl-3'
+                  } py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500`}
                   dir="ltr"
                 />
               </div>
@@ -263,10 +305,16 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-500/30 text-[11px] text-emerald-800 dark:text-emerald-200 space-y-1">
                 <p className="font-bold flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>تفعيل تلقائي لفترة تجريبية مجانية لمدة 30 يوماً</span>
+                  <span>
+                    {isEn
+                      ? 'Automatic 30-day free trial activation'
+                      : 'تفعيل تلقائي لفترة تجريبية مجانية لمدة 30 يوماً'}
+                  </span>
                 </p>
                 <p className="text-emerald-700 dark:text-emerald-200/80">
-                  بدون بطاقة بنكية أثناء التجربة — بعدها يمكنك الاستمرار باشتراك $2.95 شهرياً مع إمكانية الإلغاء في أي وقت بضغطة زر.
+                  {isEn
+                    ? 'No credit card required during the trial — continue afterwards for $2.95/month with 1-click cancellation anytime.'
+                    : 'بدون بطاقة بنكية أثناء التجربة — بعدها يمكنك الاستمرار باشتراك $2.95 شهرياً مع إمكانية الإلغاء في أي وقت بضغطة زر.'}
                 </p>
               </div>
             )}
@@ -277,9 +325,15 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               className="w-full py-2.5 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-500 via-purple-600 to-emerald-600 hover:opacity-95 shadow-lg cursor-pointer"
             >
               {isLoading
-                ? 'جاري التنفيذ...'
+                ? isEn
+                  ? 'Processing...'
+                  : 'جاري التنفيذ...'
                 : tab === 'register'
-                ? 'إنشاء حساب وبدء الشهر المجاني الآن'
+                ? isEn
+                  ? 'Create Account & Start Free Month'
+                  : 'إنشاء حساب وبدء الشهر المجاني الآن'
+                : isEn
+                ? 'Sign In'
                 : 'تسجيل الدخول'}
             </button>
           </form>
@@ -292,7 +346,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               <div className="rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-slate-500 dark:text-slate-400 block">الحساب المسجل:</span>
+                    <span className="text-slate-500 dark:text-slate-400 block">
+                      {isEn ? 'Signed-in Account:' : 'الحساب المسجل:'}
+                    </span>
                     <strong className="text-slate-900 dark:text-white text-sm">{user.name}</strong>
                     <span className="text-slate-500 dark:text-slate-400 block text-[11px]" dir="ltr">
                       {user.email}
@@ -307,7 +363,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-slate-700 text-rose-600 dark:text-rose-300 border border-slate-200 dark:border-slate-700 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>تسجيل خروج</span>
+                    <span>{isEn ? 'Sign Out' : 'تسجيل خروج'}</span>
                   </button>
                 </div>
 
@@ -315,18 +371,20 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                   <div className="flex items-center gap-2">
                     <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                     <span>
-                      الحالة الحالية:{' '}
+                      {isEn ? 'Current Status: ' : 'الحالة الحالية: '}
                       {trial.status === 'active' ? (
                         <strong className="text-emerald-700 dark:text-emerald-400">
-                          مشترك Pro نشط ($2.95/شهر)
+                          {isEn ? 'Active Pro Subscriber ($2.95/mo)' : 'مشترك Pro نشط ($2.95/شهر)'}
                         </strong>
                       ) : trial.status === 'trialing' ? (
                         <strong className="text-amber-700 dark:text-amber-300">
-                          فترة تجريبية مجانية (متبقي {trial.daysRemaining} يوماً)
+                          {isEn
+                            ? `Free Trial (${trial.daysRemaining} days left)`
+                            : `فترة تجريبية مجانية (متبقي ${trial.daysRemaining} يوماً)`}
                         </strong>
                       ) : (
                         <strong className="text-rose-700 dark:text-rose-400">
-                          انتهى الشهر المجاني — يرجى الترقية
+                          {isEn ? 'Free Trial Ended — Please Upgrade' : 'انتهى الشهر المجاني — يرجى الترقية'}
                         </strong>
                       )}
                     </span>
@@ -349,23 +407,40 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                    خطة Pro الشاملة
+                    {isEn ? 'All-Inclusive Pro Plan' : 'خطة Pro الشاملة'}
                   </span>
                   <h4 className="text-lg font-black text-slate-900 dark:text-white mt-1.5">
-                    30 يوماً مجاناً <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">ثم</span> $2.95{' '}
-                    <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">/ شهرياً</span>
+                    {isEn ? (
+                      <>
+                        30 Days Free <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">then</span>{' '}
+                        $2.95 <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">/ month</span>
+                      </>
+                    ) : (
+                      <>
+                        30 يوماً مجاناً <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">ثم</span>{' '}
+                        $2.95 <span className="text-slate-500 dark:text-slate-400 text-xs font-normal">/ شهرياً</span>
+                      </>
+                    )}
                   </h4>
                 </div>
                 <CreditCard className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
               </div>
 
               <ul className="space-y-2 text-slate-700 dark:text-slate-200">
-                {[
-                  'تقسيم غير محدود للعملاء وحفظ بيانات كل عميل شهر بعد شهر',
-                  'تعلم الذكاء الاصطناعي (Gemini) من السجل التاريخي لكل عميل (بحد استخدام عادل)',
-                  'تخصيص الثيم (فاتح / غامق) والتقارير وتصدير PDF شامل رسوم المصروف والمبيعات والعائد',
-                  'ربط Google Sheets و Webhooks (Zapier / Make / n8n) لجلب الحملات آلياً',
-                ].map((feat, i) => (
+                {(isEn
+                  ? [
+                      'Unlimited client segmentation & Month-over-Month historical tracking',
+                      'Gemini AI learning from each client’s historical performance (fair usage)',
+                      'Custom Light/Dark theme, report branding & PDF export with SVG charts',
+                      'Google Sheets & Webhooks (Zapier / Make / n8n) automated data sync',
+                    ]
+                  : [
+                      'تقسيم غير محدود للعملاء وحفظ بيانات كل عميل شهر بعد شهر',
+                      'تعلم الذكاء الاصطناعي (Gemini) من السجل التاريخي لكل عميل (بحد استخدام عادل)',
+                      'تخصيص الثيم (فاتح / غامق) والتقارير وتصدير PDF شامل رسوم المصروف والمبيعات والعائد',
+                      'ربط Google Sheets و Webhooks (Zapier / Make / n8n) لجلب الحملات آلياً',
+                    ]
+                ).map((feat, i) => (
                   <li key={i} className="flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>{feat}</span>
@@ -379,9 +454,13 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
                       <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <span>
-                        اشتراكك الشهري ($2.95/شهر) مفعّل بالكامل.
+                        {isEn
+                          ? 'Your monthly subscription ($2.95/mo) is fully active.'
+                          : 'اشتراكك الشهري ($2.95/شهر) مفعّل بالكامل.'}
                         {user.nextBillingDate &&
-                          ` التجديد القادم: ${new Date(user.nextBillingDate).toLocaleDateString('ar-SA')}`}
+                          (isEn
+                            ? ` Next renewal: ${new Date(user.nextBillingDate).toLocaleDateString('en-US')}`
+                            : ` التجديد القادم: ${new Date(user.nextBillingDate).toLocaleDateString('ar-SA')}`)}
                       </span>
                     </div>
                     <button
@@ -390,7 +469,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                       onClick={handleCancel}
                       className="w-full py-2 rounded-xl text-rose-700 dark:text-rose-300 bg-white dark:bg-slate-900 border border-rose-200 dark:border-slate-700 hover:bg-rose-50 dark:hover:bg-slate-800 font-semibold cursor-pointer"
                     >
-                      إلغاء التجديد التلقائي بضغطة زر
+                      {isEn ? 'Cancel Auto-Renewal in 1 Click' : 'إلغاء التجديد التلقائي بضغطة زر'}
                     </button>
                   </div>
                 ) : (
@@ -401,7 +480,11 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                       rel="noopener noreferrer"
                       className="w-full py-2.5 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-95 shadow-md flex items-center justify-center gap-2"
                     >
-                      <span>الدفع والاشتراك عبر Creem ($2.95 / شهر)</span>
+                      <span>
+                        {isEn
+                          ? 'Pay & Subscribe via Creem ($2.95 / mo)'
+                          : 'الدفع والاشتراك عبر Creem ($2.95 / شهر)'}
+                      </span>
                       <ExternalLink className="w-4 h-4" />
                     </a>
                     <button
@@ -410,7 +493,13 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                       onClick={handleActivate}
                       className="w-full py-2 rounded-xl font-semibold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 cursor-pointer"
                     >
-                      {isLoading ? 'جاري التفعيل...' : 'تأكيد تفعيل الاشتراك في الحساب'}
+                      {isLoading
+                        ? isEn
+                          ? 'Activating...'
+                          : 'جاري التفعيل...'
+                        : isEn
+                        ? 'Confirm Subscription Activation on Account'
+                        : 'تأكيد تفعيل الاشتراك في الحساب'}
                     </button>
                   </div>
                 )
@@ -421,7 +510,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     onClick={() => setTab('register')}
                     className="w-full py-2.5 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-95 cursor-pointer"
                   >
-                    سجّل بالإيميل وابدأ الـ 30 يوماً مجاناً
+                    {isEn
+                      ? 'Sign Up with Email & Start 30 Days Free'
+                      : 'سجّل بالإيميل وابدأ الـ 30 يوماً مجاناً'}
                   </button>
                   <a
                     href={CREEM_PAYMENT_URL}
@@ -429,7 +520,11 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
                     rel="noopener noreferrer"
                     className="w-full py-2 rounded-xl font-semibold text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 flex items-center justify-center gap-1.5"
                   >
-                    <span>رابط الدفع المباشر عبر Creem ($2.95/شهر)</span>
+                    <span>
+                      {isEn
+                        ? 'Direct Checkout Link via Creem ($2.95/mo)'
+                        : 'رابط الدفع المباشر عبر Creem ($2.95/شهر)'}
+                    </span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -441,7 +536,9 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
         {/* Legal Footer inside Auth/Subscription Modal */}
         <div className="pt-3 border-t border-slate-200 dark:border-slate-800 text-center space-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
           <p>
-            نجمع الإيميل وبيانات الحملات لإنشاء التقارير والتحليل فقط، ولا نبيع بياناتك لأي طرف ثالث.
+            {isEn
+              ? 'We collect your email and campaign data solely to generate reports and analytics, and never sell your data to third parties.'
+              : 'نجمع الإيميل وبيانات الحملات لإنشاء التقارير والتحليل فقط، ولا نبيع بياناتك لأي طرف ثالث.'}
           </p>
           <div className="flex items-center justify-center gap-3 font-semibold">
             <a
@@ -452,7 +549,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               }}
               className="text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              سياسة الخصوصية
+              {isEn ? 'Privacy Policy' : 'سياسة الخصوصية'}
             </a>
             <span>•</span>
             <a
@@ -463,7 +560,7 @@ export const AuthSubscriptionModal: React.FC<AuthSubscriptionModalProps> = ({
               }}
               className="text-indigo-600 dark:text-indigo-400 hover:underline"
             >
-              الشروط والأحكام والاسترداد
+              {isEn ? 'Terms & Refund Policy' : 'الشروط والأحكام والاسترداد'}
             </a>
           </div>
         </div>
