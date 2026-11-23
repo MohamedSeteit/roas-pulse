@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { DecisionActionCenter } from './components/DecisionActionCenter';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Upload, Link2, Sparkles } from 'lucide-react';
 import { Header } from './components/Header';
@@ -11,6 +10,7 @@ import { ClientWorkspaceBar } from './components/ClientWorkspaceBar';
 import { ExecutiveSummary } from './components/ExecutiveSummary';
 import { AiAnalysisCard } from './components/AiAnalysisCard';
 import { PlatformBreakdownCard } from './components/PlatformBreakdownCard';
+import { DecisionActionCenter } from './components/DecisionActionCenter';
 import { PerformanceCharts } from './components/PerformanceCharts';
 import { DailyAdBreakdown } from './components/DailyAdBreakdown';
 import { CampaignsTable } from './components/CampaignsTable';
@@ -1130,34 +1130,6 @@ export default function App() {
                   onSelectPlatform={setSelectedPlatform}
                 />
               )}
-              {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
-              {reportSettings.visibleSections.platforms && (
-                <PlatformBreakdownCard
-                  platforms={platformBreakdown}
-                  currency={currency}
-                  selectedPlatform={selectedPlatform}
-                  onSelectPlatform={setSelectedPlatform}
-                />
-              )}
-              {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
-              {reportSettings.visibleSections.platforms && (
-                <PlatformBreakdownCard
-                  platforms={platformBreakdown}
-                  currency={currency}
-                  selectedPlatform={selectedPlatform}
-                  onSelectPlatform={setSelectedPlatform}
-                />
-              )}
-
-              {/* AI Decision & Growth Center (Stop Bleeding, What-If Simulator, Funnel Leak Finder) */}
-              <DecisionActionCenter
-                adBreakdown={adBreakdown}
-                platforms={platformBreakdown}
-                overallMetrics={overallMetrics}
-                currency={currency}
-                targetCpa={targetCpa}
-                targetRoas={reportSettings.targetRoas}
-              />
 
               {/* Row 3: Interactive Charts */}
               {reportSettings.visibleSections.charts && (
@@ -1188,7 +1160,17 @@ export default function App() {
                 />
               )}
 
-              {/* Row 6 (Bottom): AI Campaign Intelligence & Historical Learning */}
+              {/* Row 6: AI Decision & Growth Center (Before AI Consultant) */}
+              <DecisionActionCenter
+                adBreakdown={adBreakdown}
+                platforms={platformBreakdown}
+                overallMetrics={overallMetrics}
+                currency={currency}
+                targetCpa={targetCpa}
+                targetRoas={reportSettings.targetRoas}
+              />
+
+              {/* Row 7 (Bottom): AI Campaign Intelligence & Historical Learning */}
               {reportSettings.visibleSections.aiInsights && (
                 <AiAnalysisCard
                   analysis={aiAnalysis}
