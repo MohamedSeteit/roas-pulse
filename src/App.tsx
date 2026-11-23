@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Upload, Link2, Sparkles } from 'lucide-react';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Header } from './components/Header';
 import { ClientWorkspaceBar } from './components/ClientWorkspaceBar';
 import { ExecutiveSummary } from './components/ExecutiveSummary';
@@ -132,7 +132,8 @@ function groupCampaignsByMonthKey(
   return groups;
 }
 
-export default function App() {
+function AppContent() {
+  const { isEn } = useLanguage();
   const [currentPath, setCurrentPath] = useState<string>(() => window.location.pathname || '/');
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<AdPlatform | 'all'>('all');
@@ -999,7 +1000,7 @@ export default function App() {
   return (
     <div
       className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200"
-      dir="rtl"
+      dir={isEn ? 'ltr' : 'rtl'}
     >
       <div className="no-print flex-1 flex flex-col">
         {/* Top Header */}
@@ -1191,7 +1192,9 @@ export default function App() {
         <footer className="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950 py-4 text-center text-xs text-slate-600 dark:text-slate-400">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
             <p>
-              نظام {reportSettings.brandName || 'ROAS Pulse'} لتحليل الحملات الإعلانية وعائد الإنفاق • شهر مجاني بعد التسجيل بالايميل ثم $2.95 شهرياً
+              {isEn
+                ? `${reportSettings.brandName || 'ROAS Pulse'} Ad Analytics & ROAS Intelligence • 1-Month Free Trial then $2.95/mo`
+                : `نظام ${reportSettings.brandName || 'ROAS Pulse'} لتحليل الحملات الإعلانية وعائد الإنفاق • شهر مجاني بعد التسجيل بالايميل ثم $2.95 شهرياً`}
             </p>
             <div className="flex items-center gap-3 font-semibold">
               <a
@@ -1202,7 +1205,7 @@ export default function App() {
                 }}
                 className="text-indigo-600 dark:text-indigo-400 hover:underline"
               >
-                سياسة الخصوصية
+                {isEn ? 'Privacy Policy' : 'سياسة الخصوصية'}
               </a>
               <span className="text-slate-300 dark:text-slate-700">•</span>
               <a
@@ -1213,7 +1216,7 @@ export default function App() {
                 }}
                 className="text-indigo-600 dark:text-indigo-400 hover:underline"
               >
-                الشروط والأحكام والاسترداد
+                {isEn ? 'Terms & Refund Policy' : 'الشروط والأحكام والاسترداد'}
               </a>
             </div>
           </div>
@@ -1284,5 +1287,13 @@ export default function App() {
         onOpenAuth={() => setAuthModalState({ open: true, tab: 'register' })}
       />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AppContent />
+    </LanguageProvider>
   );
 }
