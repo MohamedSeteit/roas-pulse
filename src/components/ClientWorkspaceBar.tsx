@@ -26,6 +26,7 @@ import type {
   ThemeMode,
 } from '../types/campaign';
 import { formatMonthLabelAr } from '../utils/clientAnalytics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ClientWorkspaceBarProps {
   isAuthenticated: boolean;
@@ -84,12 +85,13 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
   onOpenIntegrations,
   onOpenAuthModal,
 }) => {
+  const { isEn } = useLanguage();
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [showNewMonthInput, setShowNewMonthInput] = useState(false);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [newMonthKey, setNewMonthKey] = useState('2026-12');
   const [newName, setNewName] = useState('');
-  const [newIndustry, setNewIndustry] = useState('تجارة إلكترونية');
+  const [newIndustry, setNewIndustry] = useState(isEn ? 'E-Commerce' : 'تجارة إلكترونية');
   const [newCurrency, setNewCurrency] = useState('ر.س');
   const [newBudget, setNewBudget] = useState('5000');
   const [newNotes, setNewNotes] = useState('');
@@ -101,6 +103,14 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
   const allMonthKeys = Array.from(
     new Set([...storedMonthKeys, ...(isAggregatedView ? [] : [activeMonthKey])])
   ).sort();
+
+  const formatMonthDisplay = (mk: string) => {
+    if (!isEn) return formatMonthLabelAr(mk);
+    const [year, month] = mk.split('-');
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    if (Number.isNaN(date.getTime())) return mk;
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,7 +153,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
 
   return (
     <section
-      aria-label="إدارة العملاء والمتابعة الشهرية"
+      aria-label={isEn ? 'Client Management & Monthly Tracking' : 'إدارة العملاء والمتابعة الشهرية'}
       className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/75 p-4 space-y-3 shadow-sm dark:shadow-lg transition-colors"
     >
       {/* Top Row: Client Segmentation & Quick Workspace Actions */}
@@ -151,13 +161,13 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-1.5 rounded-xl">
             <Users className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span>مساحة العملاء:</span>
+            <span>{isEn ? 'Client Workspace:' : 'مساحة العملاء:'}</span>
           </div>
 
           {isAuthenticated && activeClient ? (
             <>
               <select
-                aria-label="اختر العميل"
+                aria-label={isEn ? 'Select Client' : 'اختر العميل'}
                 value={activeClient.id}
                 onChange={(e) => {
                   setIsMultiSelectMode(false);
@@ -167,7 +177,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               >
                 {clients.map((c) => (
                   <option key={c.id} value={c.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                    {c.name} ({Object.keys(c.months || {}).length} أشهر)
+                    {c.name} ({Object.keys(c.months || {}).length} {isEn ? 'months' : 'أشهر'})
                   </option>
                 ))}
               </select>
@@ -178,15 +188,15 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                <span>عميل جديد</span>
+                <span>{isEn ? 'New Client' : 'عميل جديد'}</span>
               </button>
 
               {clients.length > 1 && (
                 <button
                   type="button"
                   onClick={() => onDeleteClient(activeClient.id)}
-                  title="حذف هذا العميل"
-                  aria-label="حذف العميل الحالي"
+                  title={isEn ? 'Delete this client' : 'حذف هذا العميل'}
+                  aria-label={isEn ? 'Delete current client' : 'حذف العميل الحالي'}
                   className="p-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -196,7 +206,9 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-slate-600 dark:text-slate-300">
-                وضع المعاينة العامة — سجّل بإيميلك لحفظ بيانات كل عميل ومتابعتها شهر بعد شهر
+                {isEn
+                  ? 'Public Preview — Sign up with email to save each client and track Month-over-Month'
+                  : 'وضع المعاينة العامة — سجّل بإيميلك لحفظ بيانات كل عميل ومتابعتها شهر بعد شهر'}
               </span>
               <button
                 type="button"
@@ -204,7 +216,11 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-95 text-white shadow-sm cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>ابدأ شهر مجاني بالايميل (ثم $2.95/شهر)</span>
+                <span>
+                  {isEn
+                    ? 'Start 1-Month Free Trial ($2.95/mo after)'
+                    : 'ابدأ شهر مجاني بالايميل (ثم $2.95/شهر)'}
+                </span>
               </button>
             </div>
           )}
@@ -215,19 +231,26 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
           <button
             type="button"
             onClick={onToggleTheme}
-            aria-label={themeMode === 'dark' ? 'التبديل للثيم الفاتح' : 'التبديل للثيم الغامق'}
-            title={themeMode === 'dark' ? 'تفعيل الثيم الفاتح للعميل' : 'تفعيل الثيم الغامق للعميل'}
+            aria-label={
+              themeMode === 'dark'
+                ? isEn
+                  ? 'Switch to Light Mode'
+                  : 'التبديل للثيم الفاتح'
+                : isEn
+                ? 'Switch to Dark Mode'
+                : 'التبديل للثيم الغامق'
+            }
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
           >
             {themeMode === 'dark' ? (
               <>
                 <Sun className="w-3.5 h-3.5 text-amber-400" />
-                <span>ثيم فاتح</span>
+                <span>{isEn ? 'Light Theme' : 'ثيم فاتح'}</span>
               </>
             ) : (
               <>
                 <Moon className="w-3.5 h-3.5 text-indigo-600" />
-                <span>ثيم غامق</span>
+                <span>{isEn ? 'Dark Theme' : 'ثيم غامق'}</span>
               </>
             )}
           </button>
@@ -238,7 +261,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>تخصيص التقرير</span>
+            <span>{isEn ? 'Customize Report' : 'تخصيص التقرير'}</span>
           </button>
 
           <button
@@ -247,17 +270,25 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-cyan-50 dark:bg-slate-800 hover:bg-cyan-100 dark:hover:bg-slate-700 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-500/30 transition-all cursor-pointer"
           >
             <Plug className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
-            <span>ربط الأدوات (Sheets & Webhook)</span>
+            <span>{isEn ? 'Integrations (Sheets & Webhook)' : 'ربط الأدوات (Sheets & Webhook)'}</span>
           </button>
 
           {isAuthenticated ? (
             isAggregatedView ? (
               <span
-                title="وضع تجميع الشهور يعرض البيانات المدمجة للقراءة والتحليل وتصدير التقارير دون تعديل الشهور المحفوظة"
+                title={
+                  isEn
+                    ? 'Aggregated mode displays merged months for reading and PDF export'
+                    : 'وضع تجميع الشهور يعرض البيانات المدمجة للقراءة والتحليل وتصدير التقارير دون تعديل الشهور المحفوظة'
+                }
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30"
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>عرض مجمّع ({selectedMonthKeys.length} شهور)</span>
+                <span>
+                  {isEn
+                    ? `Aggregated (${selectedMonthKeys.length} mos)`
+                    : `عرض مجمّع (${selectedMonthKeys.length} شهور)`}
+                </span>
               </span>
             ) : (
               <button
@@ -277,10 +308,16 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                 )}
                 <span>
                   {isSavingMonth
-                    ? 'جاري الحفظ...'
+                    ? isEn
+                      ? 'Saving...'
+                      : 'جاري الحفظ...'
                     : hasUnsavedChanges
-                    ? `حفظ بيانات ${formatMonthLabelAr(activeMonthKey)}`
-                    : `محفوظ (${formatMonthLabelAr(activeMonthKey)})`}
+                    ? isEn
+                      ? `Save ${formatMonthDisplay(activeMonthKey)}`
+                      : `حفظ بيانات ${formatMonthDisplay(activeMonthKey)}`
+                    : isEn
+                    ? `Saved (${formatMonthDisplay(activeMonthKey)})`
+                    : `محفوظ (${formatMonthDisplay(activeMonthKey)})`}
                 </span>
               </button>
             )
@@ -291,7 +328,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 cursor-pointer"
             >
               <Lock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-              <span>حفظ العميل</span>
+              <span>{isEn ? 'Save Client' : 'حفظ العميل'}</span>
             </button>
           )}
         </div>
@@ -304,28 +341,34 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
           className="rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-indigo-200 dark:border-indigo-500/30 p-3.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs"
         >
           <div>
-            <label className="text-slate-600 dark:text-slate-400 block mb-1">اسم العميل / المتجر *</label>
+            <label className="text-slate-600 dark:text-slate-400 block mb-1">
+              {isEn ? 'Client / Store Name *' : 'اسم العميل / المتجر *'}
+            </label>
             <input
               type="text"
               required
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="مثال: متجر أطياف للعطور"
+              placeholder={isEn ? 'e.g., Atyaf Perfumes' : 'مثال: متجر أطياف للعطور'}
               className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="text-slate-600 dark:text-slate-400 block mb-1">النشاط / القطاع</label>
+            <label className="text-slate-600 dark:text-slate-400 block mb-1">
+              {isEn ? 'Industry / Niche' : 'النشاط / القطاع'}
+            </label>
             <input
               type="text"
               value={newIndustry}
               onChange={(e) => setNewIndustry(e.target.value)}
-              placeholder="تجارة إلكترونية / عطور"
+              placeholder={isEn ? 'E-Commerce / Beauty' : 'تجارة إلكترونية / عطور'}
               className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
           <div>
-            <label className="text-slate-600 dark:text-slate-400 block mb-1">العملة</label>
+            <label className="text-slate-600 dark:text-slate-400 block mb-1">
+              {isEn ? 'Currency' : 'العملة'}
+            </label>
             <select
               value={newCurrency}
               onChange={(e) => setNewCurrency(e.target.value)}
@@ -339,7 +382,9 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
             </select>
           </div>
           <div>
-            <label className="text-slate-600 dark:text-slate-400 block mb-1">الميزانية الشهرية</label>
+            <label className="text-slate-600 dark:text-slate-400 block mb-1">
+              {isEn ? 'Monthly Budget' : 'الميزانية الشهرية'}
+            </label>
             <input
               type="number"
               min="0"
@@ -354,14 +399,14 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               disabled={isCreating}
               className="flex-1 px-3 py-1.5 rounded-lg font-bold bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer"
             >
-              {isCreating ? 'جاري الإنشاء...' : 'إضافة العميل'}
+              {isCreating ? (isEn ? 'Creating...' : 'جاري الإنشاء...') : isEn ? 'Add Client' : 'إضافة العميل'}
             </button>
             <button
               type="button"
               onClick={() => setShowNewClientForm(false)}
               className="px-2.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white bg-slate-200 dark:bg-slate-800 cursor-pointer"
             >
-              إلغاء
+              {isEn ? 'Cancel' : 'إلغاء'}
             </button>
           </div>
           <div className="sm:col-span-2 lg:col-span-5">
@@ -369,7 +414,11 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               type="text"
               value={newNotes}
               onChange={(e) => setNewNotes(e.target.value)}
-              placeholder="ملاحظات للذكاء الاصطناعي حول هذا العميل (مثل: هامش الربح، المنتجات الأعلى مبيعاً، الجمهور المستهدف)..."
+              placeholder={
+                isEn
+                  ? 'AI context notes for this client (e.g., profit margin, best-selling products, target audience)...'
+                  : 'ملاحظات للذكاء الاصطناعي حول هذا العميل (مثل: هامش الربح، المنتجات الأعلى مبيعاً، الجمهور المستهدف)...'
+              }
               className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
@@ -381,12 +430,11 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
         <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1 ml-1">
+              <span className={`text-slate-600 dark:text-slate-400 flex items-center gap-1 ${isEn ? 'mr-1' : 'ml-1'}`}>
                 <CalendarRange className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                متابعة الشهور:
+                {isEn ? 'Monthly Tracking:' : 'متابعة الشهور:'}
               </span>
 
-              {/* All Stored Months Aggregated Button */}
               {storedMonthKeys.length >= 2 && (
                 <button
                   type="button"
@@ -401,7 +449,9 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                   }`}
                 >
                   <Layers className="w-3 h-3" />
-                  <span>كل الشهور ({storedMonthKeys.length})</span>
+                  <span>
+                    {isEn ? `All Months (${storedMonthKeys.length})` : `كل الشهور (${storedMonthKeys.length})`}
+                  </span>
                 </button>
               )}
 
@@ -437,18 +487,17 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                         <Square className="w-3 h-3 text-slate-400" />
                       )
                     )}
-                    <span>{formatMonthLabelAr(mk)}</span>
+                    <span>{formatMonthDisplay(mk)}</span>
                     {!isMultiSelectMode && isStored && (
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-500 dark:bg-emerald-300'}`}
-                        title="شهر محفوظ"
+                        title={isEn ? 'Saved Month' : 'شهر محفوظ'}
                       />
                     )}
                   </button>
                 );
               })}
 
-              {/* Multi-Month Custom Grouping Toggle */}
               {storedMonthKeys.length >= 2 && (
                 <button
                   type="button"
@@ -460,7 +509,15 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                   }`}
                 >
                   <CheckSquare className="w-3 h-3" />
-                  <span>{isMultiSelectMode ? 'إنهاء التحديد' : 'تجميع شهور محددة'}</span>
+                  <span>
+                    {isMultiSelectMode
+                      ? isEn
+                        ? 'Done Selecting'
+                        : 'إنهاء التحديد'
+                      : isEn
+                      ? 'Group Specific Months'
+                      : 'تجميع شهور محددة'}
+                  </span>
                 </button>
               )}
 
@@ -468,7 +525,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                 <div className="inline-flex items-center gap-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-2 py-0.5">
                   <input
                     type="month"
-                    aria-label="اختر شهر جديد"
+                    aria-label={isEn ? 'Select new month' : 'اختر شهر جديد'}
                     value={newMonthKey}
                     onChange={(e) => setNewMonthKey(e.target.value)}
                     className="bg-transparent text-slate-900 dark:text-white text-xs focus:outline-none"
@@ -484,7 +541,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                     }}
                     className="text-emerald-600 dark:text-emerald-400 font-bold px-1.5 cursor-pointer"
                   >
-                    فتح
+                    {isEn ? 'Open' : 'فتح'}
                   </button>
                   <button
                     type="button"
@@ -504,7 +561,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-dashed border-slate-300 dark:border-slate-600 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
-                  <span>إضافة شهر</span>
+                  <span>{isEn ? 'Add Month' : 'إضافة شهر'}</span>
                 </button>
               )}
             </div>
@@ -514,19 +571,21 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               <span>{activeClient.industry}</span>
               {activeClient.monthlyBudget > 0 && (
                 <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 tabular-nums">
-                  الميزانية: {activeClient.monthlyBudget.toLocaleString()} {currency}
+                  {isEn ? 'Budget:' : 'الميزانية:'} {activeClient.monthlyBudget.toLocaleString()} {currency}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Month-over-Month Comparison Strip (Shown in single-month mode) */}
+          {/* Month-over-Month Comparison Strip */}
           {!isAggregatedView && momComparison && (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/90 p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                    المصروف مقارنة بـ {momComparison.previousMonthLabel}
+                    {isEn
+                      ? `Spend vs ${momComparison.previousMonthLabel}`
+                      : `المصروف مقارنة بـ ${momComparison.previousMonthLabel}`}
                   </span>
                   <span className="font-bold text-slate-900 dark:text-slate-200 tabular-nums">
                     {momComparison.spendDiff >= 0 ? '+' : ''}
@@ -539,7 +598,9 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                    المبيعات مقارنة بـ {momComparison.previousMonthLabel}
+                    {isEn
+                      ? `Sales vs ${momComparison.previousMonthLabel}`
+                      : `المبيعات مقارنة بـ ${momComparison.previousMonthLabel}`}
                   </span>
                   <span className="font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
                     {momComparison.revenueDiff >= 0 ? '+' : ''}
@@ -552,7 +613,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                    تغيّر العائد (ROAS)
+                    {isEn ? 'ROAS Change' : 'تغيّر العائد (ROAS)'}
                   </span>
                   <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">
                     {momComparison.roasDiff >= 0 ? '+' : ''}
@@ -565,7 +626,7 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
-                    تغيّر ثمن البيعة (CPA)
+                    {isEn ? 'CPA Change' : 'تغيّر ثمن البيعة (CPA)'}
                   </span>
                   <span className="font-bold text-slate-900 dark:text-slate-200 tabular-nums">
                     {momComparison.cpaDiff >= 0 ? '+' : ''}
@@ -580,13 +641,17 @@ export const ClientWorkspaceBar: React.FC<ClientWorkspaceBarProps> = ({
           {/* Compact Multi-Month Memory Strip */}
           {monthlySeries.length >= 2 && (
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400">
-              <span className="text-indigo-700 dark:text-indigo-300 font-semibold">سجل التعلم الشهري المخزن:</span>
+              <span className="text-indigo-700 dark:text-indigo-300 font-semibold">
+                {isEn ? 'Stored Monthly Learning Log:' : 'سجل التعلم الشهري المخزن:'}
+              </span>
               {monthlySeries.map((pt) => (
                 <span
                   key={pt.monthKey}
                   className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 tabular-nums"
                 >
-                  {pt.label}: صرف {pt.spend.toLocaleString()} • مبيعات {pt.revenue.toLocaleString()} • عائد{' '}
+                  {isEn
+                    ? `${formatMonthDisplay(pt.monthKey)}: Spend ${pt.spend.toLocaleString()} • Sales ${pt.revenue.toLocaleString()} • ROAS `
+                    : `${pt.label}: صرف ${pt.spend.toLocaleString()} • مبيعات ${pt.revenue.toLocaleString()} • عائد `}
                   <strong className="text-indigo-700 dark:text-indigo-300">{pt.roas}x</strong>
                 </span>
               ))}
