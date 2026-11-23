@@ -807,10 +807,23 @@ function AppContent() {
           'Content-Type': 'application/json',
           ...authHeaders,
         },
+const handleRunAiAnalysis = useCallback(async () => {
+    if (filteredCampaigns.length === 0) return;
+
+    const currentLang: 'en' | 'ar' = isEn ? 'en' : 'ar';
+    setIsAiLoading(true);
+    try {
+      const response = await fetch('/api/ai-analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders,
+        },
         body: JSON.stringify({
           campaigns: filteredCampaigns,
           dateRange,
           targetCpa,
+          lang: currentLang,
           clientProfile: activeClient
             ? {
                 name: activeClient.name,
@@ -833,7 +846,10 @@ function AppContent() {
         const errData = await response.json().catch(() => ({}));
         setAuthModalState({ open: true, tab: 'register' });
         showToast(
-          errData.error || 'يرجى تسجيل الدخول أو بدء شهرك المجاني لتشغيل تحليل الذكاء الاصطناعي.',
+          errData.error ||
+            (isEn
+              ? 'Please sign in or start your free trial to run AI campaign analysis.'
+              : 'يرجى تسجيل الدخول أو بدء شهرك المجاني لتشغيل تحليل الذكاء الاصطناعي.'),
           'error'
         );
         return;
@@ -843,7 +859,10 @@ function AppContent() {
         const errData = await response.json().catch(() => ({}));
         setAuthModalState({ open: true, tab: 'billing' });
         showToast(
-          errData.error || 'انتهت الفترة التجريبية (30 يوماً). يرجى الاشتراك ($2.95/شهر) للمتابعة.',
+          errData.error ||
+            (isEn
+              ? 'Your 30-day free trial has ended. Please subscribe ($2.95/mo) to continue.'
+              : 'انتهت الفترة التجريبية (30 يوماً). يرجى الاشتراك ($2.95/شهر) للمتابعة.'),
           'error'
         );
         return;
@@ -852,14 +871,17 @@ function AppContent() {
       if (response.status === 429) {
         const errData = await response.json().catch(() => ({}));
         showToast(
-          errData.error || 'تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي في الساعة/اليوم.',
+          errData.error ||
+            (isEn
+              ? 'Hourly/daily AI analysis rate limit reached.'
+              : 'تم الوصول للحد الأقصى لطلبات الذكاء الاصطناعي في الساعة/اليوم.'),
           'error'
         );
         return;
       }
 
       if (!response.ok) {
-        throw new Error(`خطأ في استجابة الخادم: ${response.status}`);
+        throw new Error(`Server response error: ${response.status}`);
       }
 
       const data: AIAnalysisResult = await response.json();
@@ -870,20 +892,27 @@ function AppContent() {
     } catch (err) {
       console.error('AI Analysis failed, applying local fallback:', err);
       const { generateRuleBasedAnalysis } = await import('./utils/adMetrics');
-      const fallback = generateRuleBasedAnalysis(filteredCampaigns);
+      const fallback = generateRuleBasedAnalysis(filteredCampaigns, currentLang);
       if (previousStoredMonths.length > 0 && previousMonthSnapshot) {
         const roasDiff = Number((overallMetrics.roas - previousMonthSnapshot.summaryMetrics.roas).toFixed(2));
-        fallback.historicalComparison = {
-          trendVsPreviousMonths: `مقارنة بشهر ${previousMonthSnapshot.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات إلى ${overallMetrics.totalRevenue}.`,
-          learnedPatterns: previousStoredMonths.flatMap((h) => h.learnedTakeaways || []).slice(-4),
-          nextMonthTargets: `الحفاظ على CPA أقل من ${targetCpa} ورفع العائد فوق ${reportSettings.targetRoas}x.`,
-        };
+        fallback.historicalComparison = isEn
+          ? {
+              trendVsPreviousMonths: `Compared to ${previousMonthSnapshot.label}, ROAS changed by ${roasDiff >= 0 ? '+' : ''}${roasDiff}x and revenue moved to ${overallMetrics.totalRevenue}.`,
+              learnedPatterns: previousStoredMonths.flatMap((h) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `Maintain CPA below ${targetCpa} and scale ROAS above ${reportSettings.targetRoas}x.`,
+            }
+          : {
+              trendVsPreviousMonths: `مقارنة بشهر ${previousMonthSnapshot.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات إلى ${overallMetrics.totalRevenue}.`,
+              learnedPatterns: previousStoredMonths.flatMap((h) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `الحفاظ على CPA أقل من ${targetCpa} ورفع العائد فوق ${reportSettings.targetRoas}x.`,
+            };
       }
       setAiAnalysis(fallback);
     } finally {
       setIsAiLoading(false);
     }
   }, [
+    isEn,
     filteredCampaigns,
     authHeaders,
     dateRange,
@@ -896,7 +925,7 @@ function AppContent() {
     isAggregatedView,
     showToast,
   ]);
-
+      
   const handleImportData = useCallback(
     (newCampaigns: CampaignData[], mode: 'replace' | 'merge' = 'replace') => {
       const cleanedIncoming = sanitizeCampaignRows(newCampaigns);
