@@ -179,13 +179,15 @@ function AppContent() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [isTemplateGuideOpen, setIsTemplateGuideOpen] = useState(false); 
+  const [isTemplateGuideOpen, setIsTemplateGuideOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
-  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);    open: boolean;
+  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
+  const [authModalState, setAuthModalState] = useState<{
+    open: boolean;
     tab: 'register' | 'login' | 'billing';
   }>({ open: false, tab: 'register' });
-
+  
   const navigateTo = useCallback((targetPath: string) => {
     if (window.location.pathname !== targetPath) {
       window.history.pushState({}, '', targetPath);
