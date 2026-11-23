@@ -175,15 +175,14 @@ function AppContent() {
   const [isSavingMonth, setIsSavingMonth] = useState(false);
   const [statusToast, setStatusToast] = useState<{ text: string; tone: 'info' | 'error' } | null>(null);
 
-  // Modals & AI state
+// Modals & AI state
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isTemplateGuideOpen, setIsTemplateGuideOpen] = useState(false); 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
-  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);
-  const [authModalState, setAuthModalState] = useState<{
-    open: boolean;
+  const [isIntegrationsOpen, setIsIntegrationsOpen] = useState(false);    open: boolean;
     tab: 'register' | 'login' | 'billing';
   }>({ open: false, tab: 'register' });
 
