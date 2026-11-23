@@ -1488,20 +1488,35 @@ export function generatePlatformExactTemplateCSV(
 }
 /**
  * Rule-based fallback marketing analyst that produces structured AI-like report
- * including Day-by-Day & Ad-level insights if Gemini API key is missing or offline.
+ * including Day-by-Day & Ad-level insights in Arabic or English if Gemini API key is missing or offline.
  */
-export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysisResult {
+export function generateRuleBasedAnalysis(
+  campaigns: CampaignData[],
+  lang: 'ar' | 'en' = 'ar'
+): AIAnalysisResult {
+  const isEn = lang === 'en';
   const overall = calculateAggregatedMetrics(campaigns);
   const platforms = calculatePlatformBreakdown(campaigns);
   const { days, summary: dailySummary } = calculateDailyBreakdown(campaigns);
   const adBreakdown = calculateAdBreakdown(campaigns);
 
   const sortedPlatforms = [...platforms].sort((a, b) => b.roas - a.roas);
-  const topPlatform = sortedPlatforms[0] || { platform: 'snapchat' as AdPlatform, roas: 0, cpa: 0, platformNameAr: 'غير محدد', totalPurchases: 0 };
+  const topPlatform = sortedPlatforms[0] || {
+    platform: 'snapchat' as AdPlatform,
+    roas: 0,
+    cpa: 0,
+    platformNameAr: 'غير محدد',
+    platformNameEn: 'N/A',
+    totalPurchases: 0,
+  };
+  const topPlatformLabel = isEn ? topPlatform.platformNameEn : topPlatform.platformNameAr;
 
   const campaignsSortedByCpa = [...campaigns].filter((c) => c.purchases > 0).sort((a, b) => b.cpa - a.cpa);
-  const highestCpaCampaign = campaignsSortedByCpa[0]?.campaignName || 'لا توجد بيانات كافية';
-  const lowestCpaCampaign = campaignsSortedByCpa[campaignsSortedByCpa.length - 1]?.campaignName || 'لا توجد بيانات كافية';
+  const highestCpaCampaign =
+    campaignsSortedByCpa[0]?.campaignName || (isEn ? 'Insufficient data' : 'لا توجد بيانات كافية');
+  const lowestCpaCampaign =
+    campaignsSortedByCpa[campaignsSortedByCpa.length - 1]?.campaignName ||
+    (isEn ? 'Insufficient data' : 'لا توجد بيانات كافية');
 
   const bleedingCampaigns = campaigns.filter((c) => c.spend > 50 && c.roas < 1.6);
   const totalWaste = bleedingCampaigns.reduce((acc, cur) => acc + cur.spend, 0);
@@ -1512,19 +1527,29 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
 
     if (p.roas >= 20.0) {
       status = 'winner';
-      comment = `أداء استثنائي مع عائد ${p.roas}x وتكلفة اكتساب منخفضة (${p.cpa} ر.س) لـ ${p.totalPurchases} طلب. تمثل هذه القناة محرك الربح الأول.`;
+      comment = isEn
+        ? `Exceptional performance with ${p.roas}x ROAS and low CPA (${p.cpa}) across ${p.totalPurchases} orders. This channel is your primary profit engine.`
+        : `أداء استثنائي مع عائد ${p.roas}x وتكلفة اكتساب منخفضة (${p.cpa} ر.س) لـ ${p.totalPurchases} طلب. تمثل هذه القناة محرك الربح الأول.`;
     } else if (p.roas >= 4.0) {
       status = 'winner';
-      comment = `منصة رابحة بامتياز مع عائد ${p.roas}x وتكلفة اكتساب (${p.cpa} ر.س). يوصى برفع الميزانية تدريجياً مع مراقبة الـ CPA اليومي.`;
+      comment = isEn
+        ? `Top-performing channel with ${p.roas}x ROAS and ${p.cpa} CPA. Gradually scale budget while monitoring daily CPA.`
+        : `منصة رابحة بامتياز مع عائد ${p.roas}x وتكلفة اكتساب (${p.cpa} ر.س). يوصى برفع الميزانية تدريجياً مع مراقبة الـ CPA اليومي.`;
     } else if (p.roas >= 2.5) {
       status = 'promising';
-      comment = `أداء مستقر ومربح (عائد ${p.roas}x). ركز على تجديد التصاميم الإعلانية للحفاظ على ثبات الـ CPA.`;
+      comment = isEn
+        ? `Stable and profitable performance (${p.roas}x ROAS). Focus on refreshing ad creatives to maintain low CPA.`
+        : `أداء مستقر ومربح (عائد ${p.roas}x). ركز على تجديد التصاميم الإعلانية للحفاظ على ثبات الـ CPA.`;
     } else if (p.roas >= 1.6) {
       status = 'needs_optimization';
-      comment = `العائد يقترب من نقطة التعادل (${p.roas}x). تحتاج مراجعة الاستهداف أو صفحة الهبوط.`;
+      comment = isEn
+        ? `ROAS is near break-even (${p.roas}x). Review audience targeting, offer angle, or landing page conversion rate.`
+        : `العائد يقترب من نقطة التعادل (${p.roas}x). تحتاج مراجعة الاستهداف أو صفحة الهبوط.`;
     } else {
       status = 'underperforming';
-      comment = `أداء ضعيف أو حملة تمهيدية دون تحويل مباشر بعائد (${p.roas}x).`;
+      comment = isEn
+        ? `Low ROAS (${p.roas}x) or upper-funnel traffic campaign without direct purchase conversions.`
+        : `أداء ضعيف أو حملة تمهيدية دون تحويل مباشر بعائد (${p.roas}x).`;
     }
 
     return {
@@ -1539,100 +1564,201 @@ export function generateRuleBasedAnalysis(campaigns: CampaignData[]): AIAnalysis
   const reallocation = [];
   if (sortedPlatforms.length >= 2) {
     const winner = sortedPlatforms[0];
+    const winnerName = isEn ? winner.platformNameEn : winner.platformNameAr;
     reallocation.push({
-      fromPlatform: `الإعلانات ذات العائد الأقل وحملات التمهيد`,
-      toPlatform: `${winner.platformNameAr} (الإعلانات الأعلى تحويلاً)`,
+      fromPlatform: isEn ? 'Low-ROAS & upper-funnel ads' : 'الإعلانات ذات العائد الأقل وحملات التمهيد',
+      toPlatform: isEn ? `${winnerName} (Top Converting Ads)` : `${winnerName} (الإعلانات الأعلى تحويلاً)`,
       recommendedShiftPercent: 30,
-      expectedRoasBoost: '+20% إلى +40% تحسن في صافي العائد',
-      rationale: `نقل جزء من الصرف نحو ${winner.platformNameAr} بعائد ${winner.roas}x وثمن بيعة ${winner.cpa} ر.س يرفع حجم المبيعات على نفس الميزانية الكلية.`,
+      expectedRoasBoost: isEn ? '+20% to +40% net ROAS lift' : '+20% إلى +40% تحسن في صافي العائد',
+      rationale: isEn
+        ? `Shifting budget toward ${winnerName} (${winner.roas}x ROAS, ${winner.cpa} CPA) increases total revenue without increasing total ad spend.`
+        : `نقل جزء من الصرف نحو ${winnerName} بعائد ${winner.roas}x وثمن بيعة ${winner.cpa} ر.س يرفع حجم المبيعات على نفس الميزانية الكلية.`,
     });
   }
 
-  const periodText = overall.startDate && overall.endDate
-    ? `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`
-    : `خلال الفترة الزمنية المحددة في الملف`;
+  const periodText =
+    overall.startDate && overall.endDate
+      ? isEn
+        ? `during the period from ${overall.startDate} to ${overall.endDate}`
+        : `خلال الفترة من ${overall.startDate} إلى ${overall.endDate}`
+      : isEn
+      ? 'during the selected reporting period'
+      : 'خلال الفترة الزمنية المحددة في الملف';
 
   const fatigueWarnings: string[] = [];
   if (dailySummary.fatigueAlert) {
-    fatigueWarnings.push(dailySummary.fatigueAlert);
+    fatigueWarnings.push(
+      isEn
+        ? 'Ad fatigue signal detected: CPA increased while CTR declined in the second half of the period — refresh top ad creatives.'
+        : dailySummary.fatigueAlert
+    );
   }
   const fatiguedAds = adBreakdown.filter((a) => a.fatigueSignal === 'fatigued');
   fatiguedAds.slice(0, 3).forEach((ad) => {
-    fatigueWarnings.push(`إعلان "${ad.adName}" (${PLATFORM_NAMES_AR[ad.platform]}) أظهر ارتفاعاً في التكلفة أو عائد منخفض (${ad.roas}x).`);
+    const platName = isEn ? PLATFORM_NAMES_EN[ad.platform] : PLATFORM_NAMES_AR[ad.platform];
+    fatigueWarnings.push(
+      isEn
+        ? `Ad "${ad.adName}" (${platName}) showed rising CPA or low ROAS (${ad.roas}x).`
+        : `إعلان "${ad.adName}" (${platName}) أظهر ارتفاعاً في التكلفة أو عائد منخفض (${ad.roas}x).`
+    );
   });
 
   const adLevelRecommendations = adBreakdown.slice(0, 6).map((ad) => {
     let action: 'scale' | 'optimize' | 'pause' | 'refresh_creative' = 'optimize';
-    let reason = `عائد ${ad.roas}x وثمن بيعة ${ad.cpa} على ${ad.daysActive} يوم نشاط.`;
+    let reason = isEn
+      ? `${ad.roas}x ROAS and ${ad.cpa} CPA across ${ad.daysActive} active days.`
+      : `عائد ${ad.roas}x وثمن بيعة ${ad.cpa} على ${ad.daysActive} يوم نشاط.`;
 
     if (ad.fatigueSignal === 'fatigued' && ad.roas < 1.5) {
       action = 'pause';
-      reason = `صرف ${ad.spend.toLocaleString()} بعائد ${ad.roas}x فقط — أوقف الإعلان وحوّل ميزانيته فوراً.`;
+      reason = isEn
+        ? `Spent ${ad.spend.toLocaleString()} at only ${ad.roas}x ROAS — pause immediately and reallocate budget.`
+        : `صرف ${ad.spend.toLocaleString()} بعائد ${ad.roas}x فقط — أوقف الإعلان وحوّل ميزانيته فوراً.`;
     } else if (ad.fatigueSignal === 'fatigued') {
       action = 'refresh_creative';
-      reason = `بدأت علامات إجهاد الإعلان بالظهور رغم الصرف ${ad.spend.toLocaleString()}؛ جهّز 3 نسخ فيديو/تصميم بديلة.`;
+      reason = isEn
+        ? `Creative fatigue signals appearing after ${ad.spend.toLocaleString()} spend; launch 3 fresh video/visual hooks.`
+        : `بدأت علامات إجهاد الإعلان بالظهور رغم الصرف ${ad.spend.toLocaleString()}؛ جهّز 3 نسخ فيديو/تصميم بديلة.`;
     } else if (ad.roas >= 4.0) {
       action = 'scale';
-      reason = `إعلان نجم بعائد ${ad.roas}x و${ad.purchases} طلب — ارفع ميزانيته اليومية بنسبة 20-30% تدريجياً.`;
+      reason = isEn
+        ? `Hero ad delivering ${ad.roas}x ROAS across ${ad.purchases} orders — scale daily budget by 20–30% gradually.`
+        : `إعلان نجم بعائد ${ad.roas}x و${ad.purchases} طلب — ارفع ميزانيته اليومية بنسبة 20-30% تدريجياً.`;
     }
 
     return {
       adName: ad.adName,
-      platform: PLATFORM_NAMES_AR[ad.platform] || ad.platform,
+      platform: (isEn ? PLATFORM_NAMES_EN[ad.platform] : PLATFORM_NAMES_AR[ad.platform]) || ad.platform,
       action,
       reason,
     };
   });
 
   const bestDayMsg = dailySummary.bestDay
-    ? `أفضل يوم أداءً كان ${dailySummary.bestDay.date} بمبيعات ${dailySummary.bestDay.revenue.toLocaleString()} ر.س وعائد ${dailySummary.bestDay.roas}x.`
+    ? isEn
+      ? `Best-performing day was ${dailySummary.bestDay.date} with ${dailySummary.bestDay.revenue.toLocaleString()} revenue and ${dailySummary.bestDay.roas}x ROAS.`
+      : `أفضل يوم أداءً كان ${dailySummary.bestDay.date} بمبيعات ${dailySummary.bestDay.revenue.toLocaleString()} ر.س وعائد ${dailySummary.bestDay.roas}x.`
+    : isEn
+    ? 'Insufficient daily breakdown data to pinpoint a single peak day.'
     : 'لم تتوفر بيانات يومية كافية لتحديد أفضل يوم.';
 
   return {
-    executiveSummary: `أظهرت تحليلات الحملات ${periodText} مبيعات إجمالية بلغت ${overall.totalRevenue.toLocaleString()} ر.س مقابل مصروف إعلاني قدره ${overall.totalSpend.toLocaleString()} ر.س، بعائد على الإنفاق (ROAS) قدره ${overall.roas}x وثمن بيعة (CPA) قدره ${overall.cpa} ر.س عبر ${overall.totalPurchases} طلب${overall.totalAddToCart > 0 ? ` و${overall.totalAddToCart.toLocaleString()} إضافة للسلة` : ''}. تتصدر منصة ${topPlatform.platformNameAr} كفاءة التحويل.`,
-    periodAssessment: `${periodText}، بلغت نسبة النقر للظهور (CTR) ${overall.ctr}% بمتوسط صرف يومي ${dailySummary.avgDailySpend.toLocaleString()} ر.س ومتوسط مبيعات يومي ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س. ${bestDayMsg}`,
+    executiveSummary: isEn
+      ? `Campaign analysis ${periodText} generated ${overall.totalRevenue.toLocaleString()} in total revenue from ${overall.totalSpend.toLocaleString()} in ad spend, achieving ${overall.roas}x ROAS and ${overall.cpa} CPA across ${overall.totalPurchases} orders${
+          overall.totalAddToCart > 0 ? ` and ${overall.totalAddToCart.toLocaleString()} add-to-carts` : ''
+        }. ${topPlatformLabel} leads overall conversion efficiency.`
+      : `أظهرت تحليلات الحملات ${periodText} مبيعات إجمالية بلغت ${overall.totalRevenue.toLocaleString()} ر.س مقابل مصروف إعلاني قدره ${overall.totalSpend.toLocaleString()} ر.س، بعائد على الإنفاق (ROAS) قدره ${overall.roas}x وثمن بيعة (CPA) قدره ${overall.cpa} ر.س عبر ${overall.totalPurchases} طلب${
+          overall.totalAddToCart > 0 ? ` و${overall.totalAddToCart.toLocaleString()} إضافة للسلة` : ''
+        }. تتصدر منصة ${topPlatformLabel} كفاءة التحويل.`,
+    periodAssessment: isEn
+      ? `Across ${periodText}, average CTR reached ${overall.ctr}% with an average daily spend of ${dailySummary.avgDailySpend.toLocaleString()} and average daily revenue of ${dailySummary.avgDailyRevenue.toLocaleString()}. ${bestDayMsg}`
+      : `${periodText}، بلغت نسبة النقر للظهور (CTR) ${overall.ctr}% بمتوسط صرف يومي ${dailySummary.avgDailySpend.toLocaleString()} ر.س ومتوسط مبيعات يومي ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س. ${bestDayMsg}`,
     platformHighlights,
     dailyInsights: {
-      trendSummary: dailySummary.hasExactDailyData
-        ? `تم تحليل ${days.length} يوم فعلي يوم بيوم. اتجاه الأداء العام ${dailySummary.trendDirection === 'improving' ? 'في تحسن مستمر' : dailySummary.trendDirection === 'declining' ? 'يشهد تراجعاً يتطلب تدخلاً' : 'مستقر نسبياً'}.`
+      trendSummary: isEn
+        ? dailySummary.hasExactDailyData
+          ? `Analyzed ${days.length} actual days day-by-day. Overall trajectory is ${
+              dailySummary.trendDirection === 'improving'
+                ? 'steadily improving'
+                : dailySummary.trendDirection === 'declining'
+                ? 'declining and requires intervention'
+                : 'relatively stable'
+            }.`
+          : `Uploaded data is aggregated at the period level; ${bestDayMsg} Export reports broken down "By Day" for sharper daily pacing insights.`
+        : dailySummary.hasExactDailyData
+        ? `تم تحليل ${days.length} يوم فعلي يوم بيوم. اتجاه الأداء العام ${
+            dailySummary.trendDirection === 'improving'
+              ? 'في تحسن مستمر'
+              : dailySummary.trendDirection === 'declining'
+              ? 'يشهد تراجعاً يتطلب تدخلاً'
+              : 'مستقر نسبياً'
+          }.`
         : `البيانات المرفوعة مجمعة على مستوى الفترة؛ ${bestDayMsg} لرفع دقة التوصيات اليومية، يُنصح بتصدير التقرير مقسماً يوم بيوم (By Day / Day).`,
       bestPerformingDays: bestDayMsg,
-      fatigueWarnings: fatigueWarnings.length > 0 ? fatigueWarnings : ['لم تُرصد علامات إجهاد إعلاني حادة حالياً، استمر في مراقبة الـ CTR والـ CPA يومياً.'],
-      dailyPacingAdvice: `متوسط الحرق اليومي الحالي ${dailySummary.avgDailySpend.toLocaleString()} ر.س يحقق ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س مبيعات يومياً. حافظ على سقف زيادة يومية لا يتجاوز 25% للحفاظ على استقرار الخوارزمية.`,
+      fatigueWarnings:
+        fatigueWarnings.length > 0
+          ? fatigueWarnings
+          : [
+              isEn
+                ? 'No severe creative fatigue detected currently; continue monitoring daily CTR and CPA.'
+                : 'لم تُرصد علامات إجهاد إعلاني حادة حالياً، استمر في مراقبة الـ CTR والـ CPA يومياً.',
+            ],
+      dailyPacingAdvice: isEn
+        ? `Current daily burn rate of ${dailySummary.avgDailySpend.toLocaleString()} generates ${dailySummary.avgDailyRevenue.toLocaleString()}/day in revenue. Cap daily budget increases at 20–25% every 48 hours to protect algorithm learning.`
+        : `متوسط الحرق اليومي الحالي ${dailySummary.avgDailySpend.toLocaleString()} ر.س يحقق ${dailySummary.avgDailyRevenue.toLocaleString()} ر.س مبيعات يومياً. حافظ على سقف زيادة يومية لا يتجاوز 25% للحفاظ على استقرار الخوارزمية.`,
     },
     adLevelRecommendations,
     cpaAnalysis: {
-      status: overall.cpa <= 15 ? 'ممتاز واقتصادي جداً' : overall.cpa <= 60 ? 'صحي وضمن المستهدف' : 'مرتفع يحتاج ترشيد',
-      comment: `متوسط ثمن البيعة العام هو ${overall.cpa} ر.س. أقل حملة/إعلان تكلفة هي "${lowestCpaCampaign}"، بينما الأعلى تكلفة هي "${highestCpaCampaign}".`,
+      status: isEn
+        ? overall.cpa <= 15
+          ? 'Excellent & Highly Efficient'
+          : overall.cpa <= 60
+          ? 'Healthy & On Target'
+          : 'Elevated — Needs Optimization'
+        : overall.cpa <= 15
+        ? 'ممتاز واقتصادي جداً'
+        : overall.cpa <= 60
+        ? 'صحي وضمن المستهدف'
+        : 'مرتفع يحتاج ترشيد',
+      comment: isEn
+        ? `Overall average CPA is ${overall.cpa}. Lowest-cost campaign/ad is "${lowestCpaCampaign}", while highest-cost is "${highestCpaCampaign}".`
+        : `متوسط ثمن البيعة العام هو ${overall.cpa} ر.س. أقل حملة/إعلان تكلفة هي "${lowestCpaCampaign}"، بينما الأعلى تكلفة هي "${highestCpaCampaign}".`,
       highestCpaCampaign,
       lowestCpaCampaign,
       wasteEstimate: Math.round(totalWaste),
     },
-    budgetReallocationPlan: reallocation.length > 0 ? reallocation : [
-      {
-        fromPlatform: 'الإعلانات ذات العائد المنخفض',
-        toPlatform: topPlatform.platformNameAr,
-        recommendedShiftPercent: 25,
-        expectedRoasBoost: '+20% في العائد الكلي',
-        rationale: 'تركيز الميزانية على الإعلانات المثبتة الربحية يومياً.',
-      },
-    ],
-    actionableRecommendations: [
-      `توسيع الميزانية تدريجياً (20% كل 48 ساعة) على "${lowestCpaCampaign}" في منصة ${topPlatform.platformNameAr}.`,
-      overall.totalAddToCart > 0
-        ? `إطلاق حملة إعادة استهداف (Retargeting) مخصصة للـ ${overall.totalAddToCart.toLocaleString()} إضافة للسلة بعرض حافز شحن مجاني أو خصم محدود.`
-        : 'مراجعة مسار التحويل من النقرة إلى إتمام الطلب لرفع معدل التحويل.',
-      fatiguedAds.length > 0
-        ? `تجديد المواد الإعلانية (Hooks & Creatives) للإعلانات التي ظهر بها إجهاد إعلاني (${fatiguedAds.slice(0, 2).map((a) => a.adName).join('، ')}).`
-        : 'اختبار 2-3 زوايا فيديو جديدة أسبوعياً لتفادي إجهاد الجمهور (Ad Fatigue).',
-      'تفعيل قواعد الإيقاف التلقائي اليومية لأي إعلان يتجاوز صرفه ضعف الـ CPA المستهدف دون مبيعات.',
-    ],
-    scalingOpportunities: [
-      `التوسع الأفقي: نقل زوايا الإعلان الرابحة إلى منصات إضافية (ميتا Reels وتيك توك Spark Ads وجوجل PMax).`,
-      `تحسين متوسط قيمة الطلب (AOV = ${overall.aov} ر.س) عبر باقات التوفير لرفع العائد الكلي.`,
-    ],
-    generatedAt: new Date().toLocaleString('ar-SA'),
-    aiModelLabel: 'المحرك التحليلي الذكي (Rule-Based Fallback)',
+    budgetReallocationPlan:
+      reallocation.length > 0
+        ? reallocation
+        : [
+            {
+              fromPlatform: isEn ? 'Low-ROAS ads' : 'الإعلانات ذات العائد المنخفض',
+              toPlatform: topPlatformLabel,
+              recommendedShiftPercent: 25,
+              expectedRoasBoost: isEn ? '+20% overall ROAS lift' : '+20% في العائد الكلي',
+              rationale: isEn
+                ? 'Concentrate budget into proven daily profit-generating ads.'
+                : 'تركيز الميزانية على الإعلانات المثبتة الربحية يومياً.',
+            },
+          ],
+    actionableRecommendations: isEn
+      ? [
+          `Scale budget gradually (+20% every 48h) on "${lowestCpaCampaign}" inside ${topPlatformLabel}.`,
+          overall.totalAddToCart > 0
+            ? `Launch a dedicated retargeting campaign for the ${overall.totalAddToCart.toLocaleString()} add-to-carts with a limited-time incentive or free shipping offer.`
+            : 'Audit post-click landing page funnel to improve checkout completion rate.',
+          fatiguedAds.length > 0
+            ? `Refresh hooks & creatives for fatigued ads (${fatiguedAds
+                .slice(0, 2)
+                .map((a) => a.adName)
+                .join(', ')}).`
+            : 'Test 2–3 new video angles weekly to prevent audience ad fatigue.',
+          'Enable automated daily stop-loss rules for any ad exceeding 2x target CPA with zero conversions.',
+        ]
+      : [
+          `توسيع الميزانية تدريجياً (20% كل 48 ساعة) على "${lowestCpaCampaign}" في منصة ${topPlatformLabel}.`,
+          overall.totalAddToCart > 0
+            ? `إطلاق حملة إعادة استهداف (Retargeting) مخصصة للـ ${overall.totalAddToCart.toLocaleString()} إضافة للسلة بعرض حافز شحن مجاني أو خصم محدود.`
+            : 'مراجعة مسار التحويل من النقرة إلى إتمام الطلب لرفع معدل التحويل.',
+          fatiguedAds.length > 0
+            ? `تجديد المواد الإعلانية (Hooks & Creatives) للإعلانات التي ظهر بها إجهاد إعلاني (${fatiguedAds
+                .slice(0, 2)
+                .map((a) => a.adName)
+                .join('، ')}).`
+            : 'اختبار 2-3 زوايا فيديو جديدة أسبوعياً لتفادي إجهاد الجمهور (Ad Fatigue).',
+          'تفعيل قواعد الإيقاف التلقائي اليومية لأي إعلان يتجاوز صرفه ضعف الـ CPA المستهدف دون مبيعات.',
+        ],
+    scalingOpportunities: isEn
+      ? [
+          'Horizontal scaling: Duplicate winning creative hooks across Meta Reels, TikTok Spark Ads, and Google PMax.',
+          `Increase Average Order Value (AOV = ${overall.aov}) using bundle offers to boost overall net ROAS.`,
+        ]
+      : [
+          'التوسع الأفقي: نقل زوايا الإعلان الرابحة إلى منصات إضافية (ميتا Reels وتيك توك Spark Ads وجوجل PMax).',
+          `تحسين متوسط قيمة الطلب (AOV = ${overall.aov} ر.س) عبر باقات التوفير لرفع العائد الكلي.`,
+        ],
+    generatedAt: new Date().toLocaleString(isEn ? 'en-US' : 'ar-SA'),
+    aiModelLabel: isEn ? 'Smart Rule-Based Engine' : 'المحرك التحليلي الذكي (Rule-Based Fallback)',
   };
 }
 
