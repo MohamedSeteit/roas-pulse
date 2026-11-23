@@ -54,10 +54,15 @@ Multi-level hierarchy drilldown (Campaign → Ad Set → Ad) with automated tier
 
 ![Campaigns Drilldown](./screenshots/04-campaigns-drilldown.png)
 
-#### 5. Cumulative AI Campaign Intelligence
+#### 5. AI Decision & Growth Center
+Actionable growth command center highlighting immediate scaling candidates, budget-draining ads to pause, and real-time profit optimization opportunities across channels.
+
+![AI Decision & Growth Center](./screenshots/05-ai-decision-growth-center.png)
+
+#### 6. Cumulative AI Campaign Intelligence
 Deep Month-over-Month historical analysis powered by AI, delivering an executive summary, wasted-spend diagnosis, creative actions, and a data-backed budget reallocation plan.
 
-![AI Campaign Intelligence](./screenshots/05-ai-campaign-intelligence.png)
+![AI Campaign Intelligence](./screenshots/06-ai-campaign-intelligence.png)
 
 ---
 
@@ -128,10 +133,15 @@ Designed and developed by **Mohamed Seteit** — *Performance Marketing Manager*
 
 ![جدول تقييم كفاءة الحملات](./screenshots/04-campaigns-drilldown.png)
 
-#### 5. مستشار الذكاء الاصطناعي التراكمي (AI Campaign Intelligence)
+#### 5. مركز القرارات والنمو الذكي (AI Decision & Growth Center)
+لوحة قرارات تنفيذية فورية تحدد الإعلانات الجاهزة للتوسع (Scaling)، والإعلانات المستنزفة للميزانية الواجب إيقافها، وأسرع فرص زيادة الأرباح عبر المنصات.
+
+![مركز القرارات والنمو الذكي](./screenshots/05-ai-decision-growth-center.png)
+
+#### 6. مستشار الذكاء الاصطناعي التراكمي (AI Campaign Intelligence)
 تحليل عميق للبيانات التاريخية للعميل شهر بعد شهر، مع تقديم تعليق تنفيذي، تحليل الهدر، وتوصيات إعادة توزيع الميزانية.
 
-![مستشار الذكاء الاصطناعي التراكمي](./screenshots/05-ai-campaign-intelligence.png)
+![مستشار الذكاء الاصطناعي التراكمي](./screenshots/06-ai-campaign-intelligence.png)
 
 ---
 
