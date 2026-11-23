@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CsvTemplateGuideModal } from './components/CsvTemplateGuideModal';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Upload, Link2, Sparkles } from 'lucide-react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
@@ -17,6 +16,7 @@ import { PerformanceCharts } from './components/PerformanceCharts';
 import { DailyAdBreakdown } from './components/DailyAdBreakdown';
 import { CampaignsTable } from './components/CampaignsTable';
 import { CsvUploadModal } from './components/CsvUploadModal';
+import { CsvTemplateGuideModal } from './components/CsvTemplateGuideModal';
 import { PrintReportModal } from './components/PrintReportModal';
 import { ReportCustomizerModal } from './components/ReportCustomizerModal';
 import { AuthSubscriptionModal } from './components/AuthSubscriptionModal';
@@ -38,7 +38,7 @@ import {
   calculatePlatformBreakdown,
   calculateDailyBreakdown,
   calculateAdBreakdown,
-  generateSampleCSVString,
+  generateRuleBasedAnalysis,
   normalizeDate,
 } from './utils/adMetrics';
 import {
@@ -175,7 +175,7 @@ function AppContent() {
   const [isSavingMonth, setIsSavingMonth] = useState(false);
   const [statusToast, setStatusToast] = useState<{ text: string; tone: 'info' | 'error' } | null>(null);
 
-// Modals & AI state
+  // Modals & AI state
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -187,7 +187,7 @@ function AppContent() {
     open: boolean;
     tab: 'register' | 'login' | 'billing';
   }>({ open: false, tab: 'register' });
-  
+
   const navigateTo = useCallback((targetPath: string) => {
     if (window.location.pathname !== targetPath) {
       window.history.pushState({}, '', targetPath);
@@ -799,17 +799,6 @@ function AppContent() {
   const handleRunAiAnalysis = useCallback(async () => {
     if (filteredCampaigns.length === 0) return;
 
-    setIsAiLoading(true);
-    try {
-      const response = await fetch('/api/ai-analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders,
-        },
-const handleRunAiAnalysis = useCallback(async () => {
-    if (filteredCampaigns.length === 0) return;
-
     const currentLang: 'en' | 'ar' = isEn ? 'en' : 'ar';
     setIsAiLoading(true);
     try {
@@ -891,10 +880,11 @@ const handleRunAiAnalysis = useCallback(async () => {
       }
     } catch (err) {
       console.error('AI Analysis failed, applying local fallback:', err);
-      const { generateRuleBasedAnalysis } = await import('./utils/adMetrics');
       const fallback = generateRuleBasedAnalysis(filteredCampaigns, currentLang);
       if (previousStoredMonths.length > 0 && previousMonthSnapshot) {
-        const roasDiff = Number((overallMetrics.roas - previousMonthSnapshot.summaryMetrics.roas).toFixed(2));
+        const roasDiff = Number(
+          (overallMetrics.roas - previousMonthSnapshot.summaryMetrics.roas).toFixed(2)
+        );
         fallback.historicalComparison = isEn
           ? {
               trendVsPreviousMonths: `Compared to ${previousMonthSnapshot.label}, ROAS changed by ${roasDiff >= 0 ? '+' : ''}${roasDiff}x and revenue moved to ${overallMetrics.totalRevenue}.`,
@@ -925,7 +915,7 @@ const handleRunAiAnalysis = useCallback(async () => {
     isAggregatedView,
     showToast,
   ]);
-      
+
   const handleImportData = useCallback(
     (newCampaigns: CampaignData[], mode: 'replace' | 'merge' = 'replace') => {
       const cleanedIncoming = sanitizeCampaignRows(newCampaigns);
@@ -992,10 +982,10 @@ const handleRunAiAnalysis = useCallback(async () => {
     setHasUnsavedChanges(true);
   }, [syncDatesFromCampaigns]);
 
-const handleDownloadSample = useCallback(() => {
+  const handleDownloadSample = useCallback(() => {
     setIsTemplateGuideOpen(true);
   }, []);
-  
+
   const activePeriodDisplayLabel = useMemo(() => {
     if (isAggregatedView) {
       const storedCount = activeClient ? Object.keys(activeClient.months || {}).length : 0;
@@ -1260,6 +1250,7 @@ const handleDownloadSample = useCallback(() => {
           showToast(msg, 'error');
         }}
       />
+
       <CsvTemplateGuideModal
         isOpen={isTemplateGuideOpen}
         onClose={() => setIsTemplateGuideOpen(false)}
