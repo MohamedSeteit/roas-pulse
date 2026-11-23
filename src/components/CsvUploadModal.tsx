@@ -16,8 +16,10 @@ import {
   generateSampleCSVString,
   generateSampleDailyMultiPlatformCSV,
   PLATFORM_NAMES_AR,
+  PLATFORM_NAMES_EN,
 } from '../utils/adMetrics';
 import type { AdPlatform, CampaignData, ReportParseMeta } from '../types/campaign';
+import { useLanguage } from '../context/LanguageContext';
 
 interface CsvUploadModalProps {
   isOpen: boolean;
@@ -38,6 +40,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
   authToken,
   onAuthRequired,
 }) => {
+  const { isEn } = useLanguage();
   const [dragActive, setDragActive] = useState(false);
   const [pasteMode, setPasteMode] = useState(false);
   const [pastedText, setPastedText] = useState('');
@@ -54,6 +57,8 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
+
+  const platformNames = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
 
   const processBatch = (
     payloads: { name: string; text: string }[],
@@ -98,7 +103,11 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
     });
 
     if (validFiles.length === 0) {
-      setParseErrors(['يرجى اختيار ملفات بصيغة CSV أو TSV أو TXT مصدرة من لوحة الإعلانات.']);
+      setParseErrors([
+        isEn
+          ? 'Please select CSV, TSV, or TXT files exported from your ad manager.'
+          : 'يرجى اختيار ملفات بصيغة CSV أو TSV أو TXT مصدرة من لوحة الإعلانات.',
+      ]);
       return;
     }
 
@@ -125,17 +134,19 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
 
   const handlePlatformHintChange = (newHint: AdPlatform | 'auto') => {
     setPlatformHint(newHint);
+    const pastedLabel = isEn ? 'Pasted text' : 'نص ملصق';
     if (pasteMode && pastedText.trim()) {
-      processBatch([{ name: 'نص ملصق', text: pastedText }], newHint);
+      processBatch([{ name: pastedLabel, text: pastedText }], newHint);
     } else if (rawPayloads.length > 0) {
       processBatch(rawPayloads, newHint);
     }
   };
 
   const handleAiSmartExtract = async () => {
+    const pastedLabel = isEn ? 'Pasted report' : 'تقرير ملصق';
     const targets =
       pasteMode && pastedText.trim()
-        ? [{ name: 'تقرير ملصق', text: pastedText }]
+        ? [{ name: pastedLabel, text: pastedText }]
         : rawPayloads;
 
     if (targets.length === 0) return;
@@ -168,7 +179,11 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
 
         if (res.status === 401) {
           const errJson = await res.json().catch(() => ({}));
-          const msg = errJson.error || 'يرجى تسجيل الدخول للاستفادة من الاستخراج الذكي بـ AI.';
+          const msg =
+            errJson.error ||
+            (isEn
+              ? 'Please sign in to use Gemini AI Smart Extraction.'
+              : 'يرجى تسجيل الدخول للاستفادة من الاستخراج الذكي بـ AI.');
           onAuthRequired?.('register', msg);
           setParseErrors([msg]);
           return;
@@ -176,7 +191,11 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
 
         if (res.status === 402) {
           const errJson = await res.json().catch(() => ({}));
-          const msg = errJson.error || 'انتهت الفترة التجريبية (30 يوماً). يرجى الاشتراك للمتابعة.';
+          const msg =
+            errJson.error ||
+            (isEn
+              ? 'Your 30-day free trial has ended. Please subscribe to continue.'
+              : 'انتهت الفترة التجريبية (30 يوماً). يرجى الاشتراك للمتابعة.');
           onAuthRequired?.('billing', msg);
           setParseErrors([msg]);
           return;
@@ -184,7 +203,10 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
 
         if (!res.ok) {
           const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.error || `فشل الاستخراج الذكي (${res.status})`);
+          throw new Error(
+            errJson.error ||
+              (isEn ? `Smart extraction failed (${res.status})` : `فشل الاستخراج الذكي (${res.status})`)
+          );
         }
 
         const json = await res.json();
@@ -201,9 +223,16 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
       setParsedPreview(extractedAll);
       setParseErrors(errorsAll);
       setParseMeta(latestMeta);
-      setAiStatusMessage(latestMsg || 'تم الاستخراج الذكي عبر Gemini AI بنجاح.');
+      setAiStatusMessage(
+        latestMsg ||
+          (isEn
+            ? 'Smart extraction via Gemini AI completed successfully.'
+            : 'تم الاستخراج الذكي عبر Gemini AI بنجاح.')
+      );
     } catch (err: any) {
-      setParseErrors([err?.message || 'حدث خطأ أثناء الاستخراج الذكي.']);
+      setParseErrors([
+        err?.message || (isEn ? 'An error occurred during smart extraction.' : 'حدث خطأ أثناء الاستخراج الذكي.'),
+      ]);
     } finally {
       setIsAiExtracting(false);
     }
@@ -230,7 +259,10 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'نموذج_حملات_اعلانية_ROAS.csv');
+    link.setAttribute(
+      'download',
+      isEn ? 'ROAS_Campaigns_Sample_Template.csv' : 'نموذج_حملات_اعلانية_ROAS.csv'
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -241,11 +273,20 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
     const parsed = parseCampaignCSV(dailyCsv);
     setPasteMode(true);
     setPastedText(dailyCsv);
-    setRawPayloads([{ name: 'عينة_يومية_4_منصات.csv', text: dailyCsv }]);
+    setRawPayloads([
+      {
+        name: isEn ? 'daily_sample_4_channels.csv' : 'عينة_يومية_4_منصات.csv',
+        text: dailyCsv,
+      },
+    ]);
     setParsedPreview(parsed.data);
     setParseMeta(parsed.meta);
     setParseErrors([]);
-    setAiStatusMessage('تم تحميل نموذج تقرير يومي شامل (حملات + مجموعات + إعلانات + قمع التحويل الكامل).');
+    setAiStatusMessage(
+      isEn
+        ? 'Loaded full hierarchical daily sample (Campaigns + Ad Sets + Ads + Full Conversion Funnel).'
+        : 'تم تحميل نموذج تقرير يومي شامل (حملات + مجموعات + إعلانات + قمع التحويل الكامل).'
+    );
   };
 
   const hasRawInput = (pasteMode && pastedText.trim().length > 0) || (!pasteMode && rawPayloads.length > 0);
@@ -254,7 +295,8 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="رفع تقارير المنصات الإعلانية"
+      aria-label={isEn ? 'Upload Ad Channel Reports' : 'رفع تقارير المنصات الإعلانية'}
+      dir={isEn ? 'ltr' : 'rtl'}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl max-h-[92vh] overflow-y-auto p-6 shadow-2xl space-y-4 text-slate-900 dark:text-slate-100">
@@ -266,17 +308,21 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                رفع تقارير المنصات الإعلانية (سناب • تيك توك • ميتا • جوجل)
+                {isEn
+                  ? 'Upload Ad Channel Reports (Snapchat • TikTok • Meta • Google)'
+                  : 'رفع تقارير المنصات الإعلانية (سناب • تيك توك • ميتا • جوجل)'}
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                يدعم تقارير الحملات والمجموعات الإعلانية والإعلانات مع قمع التحويل الكامل (زيارات، سلة، دفع، شراء)
+                {isEn
+                  ? 'Supports Campaigns, Ad Sets, and Ads reports with full conversion funnel (Page views, Add to cart, Checkout, Purchases)'
+                  : 'يدعم تقارير الحملات والمجموعات الإعلانية والإعلانات مع قمع التحويل الكامل (زيارات، سلة، دفع، شراء)'}
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            aria-label="إغلاق نافذة رفع الملفات"
+            aria-label={isEn ? 'Close upload modal' : 'إغلاق نافذة رفع الملفات'}
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
@@ -288,7 +334,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs">
           <div>
             <label htmlFor="platform-source-select" className="text-slate-600 dark:text-slate-400 font-semibold block mb-1">
-              مصدر التقرير المصدّر:
+              {isEn ? 'Exported Report Source:' : 'مصدر التقرير المصدّر:'}
             </label>
             <select
               id="platform-source-select"
@@ -296,16 +342,28 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               onChange={(e) => handlePlatformHintChange(e.target.value as AdPlatform | 'auto')}
               className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
             >
-              <option value="auto">كشف تلقائي ذكي للمنصة والأعمدة</option>
-              <option value="snapchat">تقرير سناب شات (Snapchat Ads Manager)</option>
-              <option value="tiktok">تقرير تيك توك (TikTok Ads Manager)</option>
-              <option value="meta">تقرير ميتا (Meta / Facebook & IG)</option>
-              <option value="google">تقرير إعلانات جوجل (Google Ads)</option>
+              <option value="auto">
+                {isEn ? 'Smart Auto-Detect Channel & Columns' : 'كشف تلقائي ذكي للمنصة والأعمدة'}
+              </option>
+              <option value="snapchat">
+                {isEn ? 'Snapchat Ads Manager Report' : 'تقرير سناب شات (Snapchat Ads Manager)'}
+              </option>
+              <option value="tiktok">
+                {isEn ? 'TikTok Ads Manager Report' : 'تقرير تيك توك (TikTok Ads Manager)'}
+              </option>
+              <option value="meta">
+                {isEn ? 'Meta (Facebook & IG) Ads Report' : 'تقرير ميتا (Meta / Facebook & IG)'}
+              </option>
+              <option value="google">
+                {isEn ? 'Google Ads Report' : 'تقرير إعلانات جوجل (Google Ads)'}
+              </option>
             </select>
           </div>
 
           <div>
-            <span className="text-slate-600 dark:text-slate-400 font-semibold block mb-1">وضع الاستيراد:</span>
+            <span className="text-slate-600 dark:text-slate-400 font-semibold block mb-1">
+              {isEn ? 'Import Mode:' : 'وضع الاستيراد:'}
+            </span>
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -316,7 +374,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                استبدال البيانات
+                {isEn ? 'Replace Data' : 'استبدال البيانات'}
               </button>
               <button
                 type="button"
@@ -327,7 +385,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                     : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                دمج مع الحالية ({existingCount})
+                {isEn ? `Merge with Current (${existingCount})` : `دمج مع الحالية (${existingCount})`}
               </button>
             </div>
           </div>
@@ -343,7 +401,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                 !pasteMode ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              رفع ملف أو عدة ملفات (CSV / TSV)
+              {isEn ? 'Upload Single or Multiple Files (CSV / TSV)' : 'رفع ملف أو عدة ملفات (CSV / TSV)'}
             </button>
             <button
               type="button"
@@ -352,7 +410,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                 pasteMode ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              لصق بيانات التقرير مباشرة
+              {isEn ? 'Paste Report Data Directly' : 'لصق بيانات التقرير مباشرة'}
             </button>
           </div>
 
@@ -369,7 +427,13 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                 <Wand2 className="w-3.5 h-3.5" />
               )}
               <span>
-                {isAiExtracting ? 'جاري الاستخراج بالذكاء الاصطناعي...' : 'استخراج ذكي بـ Gemini AI'}
+                {isAiExtracting
+                  ? isEn
+                    ? 'Extracting with AI...'
+                    : 'جاري الاستخراج بالذكاء الاصطناعي...'
+                  : isEn
+                  ? 'Smart Extract with Gemini AI'
+                  : 'استخراج ذكي بـ Gemini AI'}
               </span>
             </button>
           )}
@@ -409,11 +473,17 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
 
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
               {fileNames.length > 0
-                ? `تم تحديد ${fileNames.length} ملف: ${fileNames.join('، ')}`
+                ? isEn
+                  ? `Selected ${fileNames.length} file(s): ${fileNames.join(', ')}`
+                  : `تم تحديد ${fileNames.length} ملف: ${fileNames.join('، ')}`
+                : isEn
+                ? 'Drag & drop report files here (single or multiple files) or click to browse'
                 : 'اسحب ملفات التقارير هنا (ملف واحد أو عدة ملفات معاً) أو اضغط للاختيار'}
             </p>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-              يدعم التقارير الكاملة (Campaign, Ad group, Ad, By Day, Page views, Adds to cart, Checkouts, Purchases)
+              {isEn
+                ? 'Supports full exports (Campaign, Ad group, Ad, By Day, Page views, Adds to cart, Checkouts, Purchases)'
+                : 'يدعم التقارير الكاملة (Campaign, Ad group, Ad, By Day, Page views, Adds to cart, Checkouts, Purchases)'}
             </p>
           </div>
         ) : (
@@ -423,11 +493,16 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               value={pastedText}
               onChange={(e) => {
                 const val = e.target.value;
+                const pastedLabel = isEn ? 'Pasted report' : 'تقرير ملصق';
                 setPastedText(val);
-                setRawPayloads([{ name: 'تقرير ملصق', text: val }]);
-                processBatch([{ name: 'تقرير ملصق', text: val }], platformHint);
+                setRawPayloads([{ name: pastedLabel, text: val }]);
+                processBatch([{ name: pastedLabel, text: val }], platformHint);
               }}
-              placeholder={`الصق محتوى ملف CSV/TSV من تيك توك أو سناب شات أو ميتا أو جوجل هنا...`}
+              placeholder={
+                isEn
+                  ? 'Paste CSV/TSV content from TikTok, Snapchat, Meta, or Google Ads here...'
+                  : 'الصق محتوى ملف CSV/TSV من تيك توك أو سناب شات أو ميتا أو جوجل هنا...'
+              }
               className="w-full bg-slate-50 dark:bg-slate-950/60 border border-slate-300 dark:border-slate-700 rounded-xl p-3 text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
             />
           </div>
@@ -445,7 +520,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 font-bold">
                 <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                <span>ملاحظات القراءة:</span>
+                <span>{isEn ? 'Parsing Notes:' : 'ملاحظات القراءة:'}</span>
               </div>
               {hasRawInput && parsedPreview.length === 0 && (
                 <button
@@ -453,7 +528,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                   onClick={handleAiSmartExtract}
                   className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 underline cursor-pointer"
                 >
-                  جرّب الاستخراج الذكي بـ AI
+                  {isEn ? 'Try Smart Extraction with AI' : 'جرّب الاستخراج الذكي بـ AI'}
                 </button>
               )}
             </div>
@@ -468,27 +543,37 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4" />
-                تم استخراج {parsedPreview.length} سجل إعلاني بنجاح
+                {isEn
+                  ? `Successfully extracted ${parsedPreview.length} ad records`
+                  : `تم استخراج ${parsedPreview.length} سجل إعلاني بنجاح`}
               </span>
               <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                 {parseMeta && (
                   <>
                     <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                      {parseMeta.hasDailyGranularity ? 'تفصيل يوم بيوم ✓' : 'مجمّع بالفترة'}
+                      {parseMeta.hasDailyGranularity
+                        ? isEn
+                          ? 'Day-by-day breakdown ✓'
+                          : 'تفصيل يوم بيوم ✓'
+                        : isEn
+                        ? 'Period aggregated'
+                        : 'مجمّع بالفترة'}
                     </span>
                     {parseMeta.hasAdLevelDetails && (
                       <span className="px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
-                        حملات ومجموعات وإعلانات ✓
+                        {isEn ? 'Campaigns, Ad Sets & Ads ✓' : 'حملات ومجموعات وإعلانات ✓'}
                       </span>
                     )}
                     {parseMeta.hasFunnelDetails && (
                       <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                        قمع التحويل الكامل ✓
+                        {isEn ? 'Full Conversion Funnel ✓' : 'قمع التحويل الكامل ✓'}
                       </span>
                     )}
                     {parseMeta.skippedSummaryRows > 0 && (
                       <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                        تم استبعاد {parseMeta.skippedSummaryRows} صف إجمالي
+                        {isEn
+                          ? `Excluded ${parseMeta.skippedSummaryRows} summary row(s)`
+                          : `تم استبعاد ${parseMeta.skippedSummaryRows} صف إجمالي`}
                       </span>
                     )}
                   </>
@@ -497,16 +582,16 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 text-[11px]">
-              <table className="w-full text-right">
+              <table className={`w-full ${isEn ? 'text-left' : 'text-right'}`}>
                 <thead className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 font-semibold">
                   <tr>
-                    <th className="p-2">الحملة / المجموعة / الإعلان</th>
-                    <th className="p-2">المنصة</th>
-                    <th className="p-2">التاريخ</th>
-                    <th className="p-2">المصروف</th>
-                    <th className="p-2">المبيعات</th>
+                    <th className="p-2">{isEn ? 'Campaign / Ad Set / Ad' : 'الحملة / المجموعة / الإعلان'}</th>
+                    <th className="p-2">{isEn ? 'Channel' : 'المنصة'}</th>
+                    <th className="p-2">{isEn ? 'Date' : 'التاريخ'}</th>
+                    <th className="p-2">{isEn ? 'Spend' : 'المصروف'}</th>
+                    <th className="p-2">{isEn ? 'Sales' : 'المبيعات'}</th>
                     <th className="p-2">ROAS</th>
-                    <th className="p-2">الطلبات</th>
+                    <th className="p-2">{isEn ? 'Orders' : 'الطلبات'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800/60 text-slate-800 dark:text-slate-200">
@@ -521,7 +606,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="p-2 whitespace-nowrap">{PLATFORM_NAMES_AR[r.platform] || r.platform}</td>
+                      <td className="p-2 whitespace-nowrap">{platformNames[r.platform] || r.platform}</td>
                       <td className="p-2 text-slate-500 dark:text-slate-400 font-mono text-[10px] whitespace-nowrap">
                         {r.startDate && r.endDate && r.startDate !== r.endDate
                           ? `${r.startDate} ↔ ${r.endDate}`
@@ -548,7 +633,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>تحميل قالب CSV</span>
+              <span>{isEn ? 'Download CSV Template' : 'تحميل قالب CSV'}</span>
             </button>
 
             <button
@@ -557,7 +642,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all cursor-pointer"
             >
               <Layers className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>تجربة بيانات هرمية كاملة</span>
+              <span>{isEn ? 'Try Full Hierarchical Sample' : 'تجربة بيانات هرمية كاملة'}</span>
             </button>
 
             <button
@@ -569,7 +654,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-500/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>بياناتك الحالية</span>
+              <span>{isEn ? 'Load Demo Dataset' : 'بياناتك الحالية'}</span>
             </button>
           </div>
 
@@ -579,7 +664,7 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
             >
-              إلغاء
+              {isEn ? 'Cancel' : 'إلغاء'}
             </button>
             <button
               type="button"
@@ -591,7 +676,14 @@ export const CsvUploadModal: React.FC<CsvUploadModalProps> = ({
                   : 'bg-slate-300 dark:bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
             >
-              {importMode === 'merge' ? 'دمج في اللوحة' : 'تأكيد الاستيراد'} ({parsedPreview.length})
+              {importMode === 'merge'
+                ? isEn
+                  ? 'Merge into Dashboard'
+                  : 'دمج في اللوحة'
+                : isEn
+                ? 'Confirm Import'
+                : 'تأكيد الاستيراد'}{' '}
+              ({parsedPreview.length})
             </button>
           </div>
         </div>
