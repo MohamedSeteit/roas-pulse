@@ -12,6 +12,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Layers,
+  Languages,
 } from 'lucide-react';
 import type {
   AdPlatform,
@@ -22,7 +23,7 @@ import type {
 import {
   PLATFORM_NAMES_AR,
   PLATFORM_NAMES_EN,
-  generateSampleDailyMultiPlatformCSV,
+  generatePlatformExactTemplateCSV,
 } from '../utils/adMetrics';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -49,6 +50,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
 }) => {
   const { isEn } = useLanguage();
   const [activeTab, setActiveTab] = useState<'sheets' | 'webhook' | 'connectors'>('sheets');
+  const [templateLang, setTemplateLang] = useState<'ar' | 'en'>(isEn ? 'en' : 'ar');
   const [sheetUrl, setSheetUrl] = useState('');
   const [platformHint, setPlatformHint] = useState<AdPlatform | 'auto'>('auto');
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('merge');
@@ -200,16 +202,20 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
     }
   };
 
-  const handleDownloadPlatformTemplate = (platformName: string) => {
-    const csv = generateSampleDailyMultiPlatformCSV();
+  const handleDownloadPlatformTemplate = (platform: AdPlatform) => {
+    const csv = generatePlatformExactTemplateCSV(platform, templateLang);
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = isEn ? `connector_template_${platformName}.csv` : `قالب_ربط_${platformName}.csv`;
+    a.download =
+      templateLang === 'ar'
+        ? `قالب_ربط_${platform}_عربي.csv`
+        : `connector_template_${platform}_EN.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const pendingWebhookCount = webhookEvents
@@ -571,71 +577,115 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({
 
         {/* TAB 3: Platform Export Connectors */}
         {activeTab === 'connectors' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            {(
-              [
-                {
-                  id: 'snapchat',
-                  guideAr:
-                    'من Ads Manager اختر Manage Ads ← Columns: Spend, Paid Impressions, Swipe Ups, Purchases, Purchase Value ثم Export By Day.',
-                  guideEn:
-                    'In Snapchat Ads Manager, go to Manage Ads → Columns: Spend, Paid Impressions, Swipe Ups, Purchases, Purchase Value, then Export By Day.',
-                  cols: 'Campaign Name, Ad Squad Name, Ad Name, Start Time, Spend, Purchase Value, Purchases',
-                },
-                {
-                  id: 'tiktok',
-                  guideAr:
-                    'من TikTok Ads Manager اختر Reporting ← Breakdown: By Day ثم Export CSV/TSV.',
-                  guideEn:
-                    'In TikTok Ads Manager, go to Reporting → Breakdown: By Day, then Export CSV/TSV.',
-                  cols: 'Campaign name, Ad group name, Ad name, By Day, Cost, Complete Payment Value, Complete Payment',
-                },
-                {
-                  id: 'meta',
-                  guideAr:
-                    'من Meta Ads Manager اختر Breakdown ← By Time: Day ثم Export Table Data (CSV).',
-                  guideEn:
-                    'In Meta Ads Manager, select Breakdown → By Time: Day, then Export Table Data (CSV).',
-                  cols: 'Campaign name, Ad set name, Ad name, Reporting starts, Amount spent, Purchases conversion value',
-                },
-                {
-                  id: 'google',
-                  guideAr:
-                    'من Google Ads اختر Campaigns ← Segment: Time (Day) ثم Download CSV مباشرة بدون حذف أسطر العنوان.',
-                  guideEn:
-                    'In Google Ads, go to Campaigns → Segment: Time (Day), then Download CSV directly without deleting header lines.',
-                  cols: 'Campaign, Ad group, Day, Cost, Conv. value, Conversions, Impr., Clicks',
-                },
-              ] as const
-            ).map((conn) => (
-              <div
-                key={conn.id}
-                className="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 p-4 flex flex-col justify-between space-y-3"
-              >
-                <div className="space-y-1.5">
-                  <h4 className="font-bold text-slate-900 dark:text-white text-sm">
-                    {platformNames[conn.id]}
-                  </h4>
-                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
-                    {isEn ? conn.guideEn : conn.guideAr}
-                  </p>
-                  <p
-                    className="text-[10px] text-indigo-700 dark:text-indigo-300 font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg"
-                    dir="ltr"
-                  >
-                    {conn.cols}
-                  </p>
-                </div>
+          <div className="space-y-3 text-xs">
+            {/* Language Switcher for Native Templates */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                {isEn
+                  ? 'Select template file language for the 4 platforms:'
+                  : 'اختر لغة ملف القالب الجاهز للمنصات الأربعة:'}
+              </span>
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-700 text-[11px]">
+                <Languages className="w-3.5 h-3.5 text-slate-500 mx-1" />
                 <button
                   type="button"
-                  onClick={() => handleDownloadPlatformTemplate(conn.id)}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 cursor-pointer"
+                  onClick={() => setTemplateLang('ar')}
+                  className={`px-2.5 py-0.5 rounded font-bold cursor-pointer ${
+                    templateLang === 'ar'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-300'
+                  }`}
                 >
-                  <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>{isEn ? 'Download Ready Template' : 'تحميل قالب جاهز للربط'}</span>
+                  عربي
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateLang('en')}
+                  className={`px-2.5 py-0.5 rounded font-bold cursor-pointer ${
+                    templateLang === 'en'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  English
                 </button>
               </div>
-            ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(
+                [
+                  {
+                    id: 'snapchat',
+                    guideAr:
+                      'من Ads Manager اختر Manage Ads ← Columns: Spend, Paid Impressions, Swipe Ups, Purchases, Purchase Value ثم Export By Day.',
+                    guideEn:
+                      'In Snapchat Ads Manager, go to Manage Ads → Columns: Spend, Paid Impressions, Swipe Ups, Purchases, Purchase Value, then Export By Day.',
+                    cols: 'Campaign Name, Ad Squad Name, Ad Name, Start Time, Spend, Purchase Value, Purchases',
+                  },
+                  {
+                    id: 'tiktok',
+                    guideAr:
+                      'من TikTok Ads Manager اختر Reporting ← Breakdown: By Day ثم Export CSV/TSV.',
+                    guideEn:
+                      'In TikTok Ads Manager, go to Reporting → Breakdown: By Day, then Export CSV/TSV.',
+                    cols: 'Campaign name, Ad group name, Ad name, By Day, Cost, Complete Payment Value, Complete Payment',
+                  },
+                  {
+                    id: 'meta',
+                    guideAr:
+                      'من Meta Ads Manager اختر Breakdown ← By Time: Day ثم Export Table Data (CSV).',
+                    guideEn:
+                      'In Meta Ads Manager, select Breakdown → By Time: Day, then Export Table Data (CSV).',
+                    cols: 'Campaign name, Ad set name, Ad name, Reporting starts, Amount spent, Purchases conversion value',
+                  },
+                  {
+                    id: 'google',
+                    guideAr:
+                      'من Google Ads اختر Campaigns ← Segment: Time (Day) ثم Download CSV مباشرة بدون حذف أسطر العنوان.',
+                    guideEn:
+                      'In Google Ads, go to Campaigns → Segment: Time (Day), then Download CSV directly without deleting header lines.',
+                    cols: 'Campaign, Ad group, Day, Cost, Conv. value, Conversions, Impr., Clicks',
+                  },
+                ] as const
+              ).map((conn) => (
+                <div
+                  key={conn.id}
+                  className="rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 p-4 flex flex-col justify-between space-y-3"
+                >
+                  <div className="space-y-1.5">
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                      {platformNames[conn.id]}
+                    </h4>
+                    <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {isEn ? conn.guideEn : conn.guideAr}
+                    </p>
+                    <p
+                      className="text-[10px] text-indigo-700 dark:text-indigo-300 font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg"
+                      dir="ltr"
+                    >
+                      {conn.cols}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadPlatformTemplate(conn.id)}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700 font-semibold cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>
+                      {templateLang === 'ar'
+                        ? isEn
+                          ? 'Download Arabic Template'
+                          : 'تحميل قالب جاهز (عربي)'
+                        : isEn
+                        ? 'Download English Template'
+                        : 'تحميل قالب جاهز (English)'}
+                    </span>
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
