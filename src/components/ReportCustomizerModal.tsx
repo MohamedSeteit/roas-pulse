@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, SlidersHorizontal, Save, Eye, Sun, Moon } from 'lucide-react';
 import type { ReportCustomizationSettings } from '../types/campaign';
+import { useLanguage } from '../context/LanguageContext';
 
 interface ReportCustomizerModalProps {
   isOpen: boolean;
@@ -11,15 +12,69 @@ interface ReportCustomizerModalProps {
   onSave: (nextSettings: ReportCustomizationSettings, nextCurrency: string) => Promise<void> | void;
 }
 
-const SECTION_LABELS: { key: keyof ReportCustomizationSettings['visibleSections']; label: string; desc: string }[] = [
-  { key: 'kpis', label: 'مؤشرات الأداء الرئيسية (KPIs)', desc: 'المصروف، المبيعات، العائد، ثمن البيعة والانتشار' },
-  { key: 'momComparison', label: 'مقارنة الأداء شهر بعد شهر', desc: 'إظهار الفروقات الشهرية وتطور العميل' },
-  { key: 'platforms', label: 'تحليل المنصات الأربعة', desc: 'بطاقات وجدول سناب شات، تيك توك، ميتا وجوجل' },
-  { key: 'charts', label: 'الرسوم البيانية التفاعلية في الداشبورد', desc: 'منحنى المصروف والمبيعات والعائد اليومي' },
-  { key: 'dailyBreakdown', label: 'التفصيل اليومي ومستوى الإعلانات', desc: 'تفصيل يوم بيوم وإشارات الإجهاد الإعلاني' },
-  { key: 'campaignsTable', label: 'جدول الحملات التفصيلي', desc: 'الجدول الكامل للحملات مع الفرز والبحث' },
-  { key: 'aiInsights', label: 'استشارات الذكاء الاصطناعي (AI)', desc: 'التعليق التنفيذي وخطة الميزانية والتعلم التاريخي' },
-  { key: 'pdfCharts', label: 'رسوم PDF (المصروف • المبيعات • العائد فقط)', desc: 'تضمين الرسوم البيانية المخصصة في ملف PDF المصدّر' },
+const SECTION_LABELS: {
+  key: keyof ReportCustomizationSettings['visibleSections'];
+  labelAr: string;
+  descAr: string;
+  labelEn: string;
+  descEn: string;
+}[] = [
+  {
+    key: 'kpis',
+    labelAr: 'مؤشرات الأداء الرئيسية (KPIs)',
+    descAr: 'المصروف، المبيعات، العائد، ثمن البيعة والانتشار',
+    labelEn: 'Key Performance Indicators (KPIs)',
+    descEn: 'Total spend, sales, ROAS, CPA, and reach metrics',
+  },
+  {
+    key: 'momComparison',
+    labelAr: 'مقارنة الأداء شهر بعد شهر',
+    descAr: 'إظهار الفروقات الشهرية وتطور العميل',
+    labelEn: 'Month-over-Month Comparison',
+    descEn: 'Display monthly variances and client growth trends',
+  },
+  {
+    key: 'platforms',
+    labelAr: 'تحليل المنصات الأربعة',
+    descAr: 'بطاقات وجدول سناب شات، تيك توك، ميتا وجوجل',
+    labelEn: '4-Channel Breakdown',
+    descEn: 'Cards and comparison table for Snapchat, TikTok, Meta & Google',
+  },
+  {
+    key: 'charts',
+    labelAr: 'الرسوم البيانية التفاعلية في الداشبورد',
+    descAr: 'منحنى المصروف والمبيعات والعائد اليومي',
+    labelEn: 'Interactive Dashboard Charts',
+    descEn: 'Spend vs. sales timeline and daily ROAS curve',
+  },
+  {
+    key: 'dailyBreakdown',
+    labelAr: 'التفصيل اليومي ومستوى الإعلانات',
+    descAr: 'تفصيل يوم بيوم وإشارات الإجهاد الإعلاني',
+    labelEn: 'Day-by-Day & Ad-Level Breakdown',
+    descEn: 'Daily breakdown and creative ad fatigue signals',
+  },
+  {
+    key: 'campaignsTable',
+    labelAr: 'جدول الحملات التفصيلي',
+    descAr: 'الجدول الكامل للحملات مع الفرز والبحث',
+    labelEn: 'Detailed Campaigns Table',
+    descEn: 'Full campaigns hierarchy table with sorting & search',
+  },
+  {
+    key: 'aiInsights',
+    labelAr: 'استشارات الذكاء الاصطناعي (AI)',
+    descAr: 'التعليق التنفيذي وخطة الميزانية والتعلم التاريخي',
+    labelEn: 'AI Consultant & Insights',
+    descEn: 'Executive commentary, budget plan & historical learning',
+  },
+  {
+    key: 'pdfCharts',
+    labelAr: 'رسوم PDF (المصروف • المبيعات • العائد فقط)',
+    descAr: 'تضمين الرسوم البيانية المخصصة في ملف PDF المصدّر',
+    labelEn: 'PDF Charts (Spend • Sales • ROAS)',
+    descEn: 'Include visual SVG charts in the exported PDF report',
+  },
 ];
 
 export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
@@ -30,6 +85,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
   clientName,
   onSave,
 }) => {
+  const { isEn } = useLanguage();
   const [form, setForm] = useState<ReportCustomizationSettings>(settings);
   const [curr, setCurr] = useState(currency);
   const [isSaving, setIsSaving] = useState(false);
@@ -69,7 +125,8 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="تخصيص الداشبورد والتقارير"
+      aria-label={isEn ? 'Customize Dashboard & Reports' : 'تخصيص الداشبورد والتقارير'}
+      dir={isEn ? 'ltr' : 'rtl'}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 shadow-2xl space-y-5 text-slate-900 dark:text-slate-100">
@@ -80,10 +137,14 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                تخصيص الداشبورد والتقرير التنفيذي
+                {isEn
+                  ? 'Customize Dashboard & Executive Report'
+                  : 'تخصيص الداشبورد والتقرير التنفيذي'}
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-400">
-                إعدادات المظهر والأهداف وتفاصيل ملف PDF للعميل:{' '}
+                {isEn
+                  ? 'Appearance, KPI targets, and PDF export settings for client: '
+                  : 'إعدادات المظهر والأهداف وتفاصيل ملف PDF للعميل: '}
                 <strong className="text-slate-900 dark:text-slate-200">{clientName}</strong>
               </p>
             </div>
@@ -91,7 +152,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
 
           <button
             type="button"
-            aria-label="إغلاق نافذة التخصيص"
+            aria-label={isEn ? 'Close customization modal' : 'إغلاق نافذة التخصيص'}
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
           >
@@ -103,7 +164,9 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
           {/* Per-Client Light / Dark Theme Selector */}
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2">
             <span className="text-slate-800 dark:text-slate-200 font-bold block">
-              مظهر الواجهة حسب تخصيص العميل (الثيم الفاتح / الغامق):
+              {isEn
+                ? 'Interface Theme for this Client (Light / Dark):'
+                : 'مظهر الواجهة حسب تخصيص العميل (الثيم الفاتح / الغامق):'}
             </span>
             <div className="grid grid-cols-2 gap-2.5">
               <button
@@ -116,7 +179,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
                 }`}
               >
                 <Sun className="w-4 h-4 text-amber-400" />
-                <span>الثيم الفاتح (Light)</span>
+                <span>{isEn ? 'Light Theme' : 'الثيم الفاتح (Light)'}</span>
               </button>
               <button
                 type="button"
@@ -128,14 +191,16 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
                 }`}
               >
                 <Moon className="w-4 h-4 text-indigo-400" />
-                <span>الثيم الغامق (Dark)</span>
+                <span>{isEn ? 'Dark Theme' : 'الثيم الغامق (Dark)'}</span>
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">عنوان التقرير</label>
+              <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
+                {isEn ? 'Report Title' : 'عنوان التقرير'}
+              </label>
               <input
                 type="text"
                 value={form.reportTitle}
@@ -146,7 +211,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
 
             <div>
               <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                اسم الوكالة / العلامة في الهيدر
+                {isEn ? 'Agency / Brand Name in Header' : 'اسم الوكالة / العلامة في الهيدر'}
               </label>
               <input
                 type="text"
@@ -158,7 +223,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
 
             <div>
               <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                هدف ثمن البيعة (Target CPA)
+                {isEn ? 'Target CPA' : 'هدف ثمن البيعة (Target CPA)'}
               </label>
               <input
                 type="number"
@@ -172,7 +237,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
 
             <div>
               <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-                هدف العائد (Target ROAS)
+                {isEn ? 'Target ROAS' : 'هدف العائد (Target ROAS)'}
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -184,7 +249,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
                   className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
                 <select
-                  aria-label="العملة"
+                  aria-label={isEn ? 'Currency' : 'العملة'}
                   value={curr}
                   onChange={(e) => setCurr(e.target.value)}
                   className="bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-2.5 py-2 text-slate-900 dark:text-white"
@@ -201,13 +266,19 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
 
           <div>
             <label className="text-slate-700 dark:text-slate-300 font-semibold block mb-1">
-              ملاحظة تنفيذية مخصصة تظهر للعميل في التقرير المصدّر (PDF)
+              {isEn
+                ? 'Custom Executive Note displayed to the client in exported PDF'
+                : 'ملاحظة تنفيذية مخصصة تظهر للعميل في التقرير المصدّر (PDF)'}
             </label>
             <textarea
               rows={2}
               value={form.executiveNote}
               onChange={(e) => setForm({ ...form, executiveNote: e.target.value })}
-              placeholder="مثال: تم إيقاف الإعلانات ذات التكلفة المرتفعة والتركيز على الفيديوهات الأعلى مبيعاً للشهر القادم..."
+              placeholder={
+                isEn
+                  ? 'e.g., High-CPA ads were paused and budget was shifted to top-converting video creatives for next month...'
+                  : 'مثال: تم إيقاف الإعلانات ذات التكلفة المرتفعة والتركيز على الفيديوهات الأعلى مبيعاً للشهر القادم...'
+              }
               className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           </div>
@@ -215,7 +286,9 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
           <div className="space-y-2">
             <span className="text-slate-700 dark:text-slate-300 font-bold flex items-center gap-1.5">
               <Eye className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              تخصيص الأقسام الظاهرة في الداشبورد وتقرير PDF:
+              {isEn
+                ? 'Visible Sections in Dashboard & PDF Report:'
+                : 'تخصيص الأقسام الظاهرة في الداشبورد وتقرير PDF:'}
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {SECTION_LABELS.map((sec) => {
@@ -236,8 +309,10 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
                       className="mt-0.5 accent-indigo-600 cursor-pointer"
                     />
                     <div>
-                      <span className="font-semibold block">{sec.label}</span>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">{sec.desc}</span>
+                      <span className="font-semibold block">{isEn ? sec.labelEn : sec.labelAr}</span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {isEn ? sec.descEn : sec.descAr}
+                      </span>
                     </div>
                   </label>
                 );
@@ -251,7 +326,7 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
             >
-              إلغاء
+              {isEn ? 'Cancel' : 'إلغاء'}
             </button>
             <button
               type="submit"
@@ -259,7 +334,15 @@ export const ReportCustomizerModal: React.FC<ReportCustomizerModalProps> = ({
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md cursor-pointer"
             >
               <Save className="w-4 h-4" />
-              <span>{isSaving ? 'جاري الحفظ...' : 'حفظ التخصيص'}</span>
+              <span>
+                {isSaving
+                  ? isEn
+                    ? 'Saving...'
+                    : 'جاري الحفظ...'
+                  : isEn
+                  ? 'Save Customization'
+                  : 'حفظ التخصيص'}
+              </span>
             </button>
           </div>
         </form>
