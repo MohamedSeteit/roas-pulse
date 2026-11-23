@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { CampaignData, DailyBreakdownItem } from '../types/campaign';
 import { Activity } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface PerformanceChartsProps {
   campaigns: CampaignData[];
@@ -15,6 +16,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
   hasExactDailyData,
   currency,
 }) => {
+  const { isEn } = useLanguage();
   const [chartMode, setChartMode] = useState<'timeline' | 'roas_cpa' | 'matrix'>('timeline');
   const [granularity, setGranularity] = useState<'auto' | 'daily' | 'campaign'>('auto');
 
@@ -28,8 +30,10 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
     if (effectiveGranularity === 'daily' && dailyDays.length > 0) {
       return dailyDays.slice(-24).map((d) => ({
         label: d.date.slice(5),
-        fullLabel: `يوم ${d.date}${d.isEstimated ? ' (تقديري)' : ''}`,
-        period: `${d.adsCount} إعلان نشط`,
+        fullLabel: isEn
+          ? `Day ${d.date}${d.isEstimated ? ' (Est.)' : ''}`
+          : `يوم ${d.date}${d.isEstimated ? ' (تقديري)' : ''}`,
+        period: isEn ? `${d.adsCount} active ads` : `${d.adsCount} إعلان نشط`,
         spend: d.spend,
         revenue: d.revenue,
         purchases: d.purchases,
@@ -58,7 +62,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
         addToCart: c.addToCart || 0,
       };
     });
-  }, [effectiveGranularity, dailyDays, campaigns]);
+  }, [effectiveGranularity, dailyDays, campaigns, isEn]);
 
   const maxSpendRevenue = useMemo(
     () => Math.max(...timelineData.map((d) => Math.max(d.spend, d.revenue)), 100),
@@ -77,7 +81,9 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
         <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            تحليلات الأداء البصري والمسار الزمني (Performance Analytics)
+            {isEn
+              ? 'Visual Performance & Timeline Analytics'
+              : 'تحليلات الأداء البصري والمسار الزمني (Performance Analytics)'}
           </h3>
         </div>
 
@@ -94,7 +100,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                يوم بيوم
+                {isEn ? 'Day by Day' : 'يوم بيوم'}
               </button>
               <button
                 type="button"
@@ -105,7 +111,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                حسب الحملة
+                {isEn ? 'By Campaign' : 'حسب الحملة'}
               </button>
             </div>
           )}
@@ -121,7 +127,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              المصروف مقابل المبيعات
+              {isEn ? 'Spend vs Revenue' : 'المصروف مقابل المبيعات'}
             </button>
             <button
               type="button"
@@ -132,7 +138,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              مسار العائد (ROAS)
+              {isEn ? 'ROAS Trend' : 'مسار العائد (ROAS)'}
             </button>
             <button
               type="button"
@@ -143,7 +149,7 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              مصفوفة الكفاءة (ROAS / CPA)
+              {isEn ? 'Efficiency Matrix (ROAS / CPA)' : 'مصفوفة الكفاءة (ROAS / CPA)'}
             </button>
           </div>
         </div>
@@ -156,18 +162,22 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" />
-                المصروف ({currency})
+                {isEn ? `Spend (${currency})` : `المصروف (${currency})`}
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm bg-emerald-500 dark:bg-emerald-400 inline-block" />
-                المبيعات ({currency})
+                {isEn ? `Sales (${currency})` : `المبيعات (${currency})`}
               </span>
             </div>
-            <span className="tabular-nums">القيمة القصوى: {maxSpendRevenue.toLocaleString()} {currency}</span>
+            <span className="tabular-nums">
+              {isEn ? 'Max Value:' : 'القيمة القصوى:'} {maxSpendRevenue.toLocaleString()} {currency}
+            </span>
           </div>
 
           {timelineData.length === 0 ? (
-            <div className="py-12 text-center text-xs text-slate-500">لا توجد بيانات زمنية للعرض</div>
+            <div className="py-12 text-center text-xs text-slate-500">
+              {isEn ? 'No timeline data available' : 'لا توجد بيانات زمنية للعرض'}
+            </div>
           ) : (
             <div className="h-64 flex items-end gap-2 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-200 dark:border-slate-800">
               {timelineData.map((item, idx) => {
@@ -179,15 +189,20 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                     key={idx}
                     className="flex-1 min-w-0 flex flex-col items-center h-full justify-end group relative"
                   >
-                    {/* Tooltip on hover */}
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-20 z-20 bg-slate-900 border border-slate-700 text-white text-[11px] rounded-lg p-2.5 pointer-events-none shadow-xl whitespace-nowrap">
                       <p className="font-bold text-slate-200">{item.fullLabel}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{item.period}</p>
-                      <p className="text-indigo-400">المصروف: {item.spend.toLocaleString()} {currency}</p>
-                      <p className="text-emerald-400">المبيعات: {item.revenue.toLocaleString()} {currency}</p>
-                      <p className="text-amber-300 font-bold">العائد (ROAS): {item.roas}x</p>
+                      <p className="text-indigo-400">
+                        {isEn ? 'Spend:' : 'المصروف:'} {item.spend.toLocaleString()} {currency}
+                      </p>
+                      <p className="text-emerald-400">
+                        {isEn ? 'Sales:' : 'المبيعات:'} {item.revenue.toLocaleString()} {currency}
+                      </p>
+                      <p className="text-amber-300 font-bold">ROAS: {item.roas}x</p>
                       {item.addToCart > 0 && (
-                        <p className="text-purple-300">السلات: {item.addToCart}</p>
+                        <p className="text-purple-300">
+                          {isEn ? 'Add to Cart:' : 'السلات:'} {item.addToCart}
+                        </p>
                       )}
                     </div>
 
@@ -202,7 +217,10 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                       />
                     </div>
 
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 truncate w-full text-center" title={item.fullLabel}>
+                    <span
+                      className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 truncate w-full text-center"
+                      title={item.fullLabel}
+                    >
                       {item.label}
                     </span>
                   </div>
@@ -219,9 +237,15 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-full bg-emerald-500 dark:bg-emerald-400 inline-block" />
-              معدل العائد (ROAS) {effectiveGranularity === 'daily' ? 'اليومي' : 'لكل حملة'}
+              {effectiveGranularity === 'daily'
+                ? isEn
+                  ? 'Daily ROAS Performance'
+                  : 'معدل العائد (ROAS) اليومي'
+                : isEn
+                ? 'ROAS per Campaign'
+                : 'معدل العائد (ROAS) لكل حملة'}
             </span>
-            <span>خط الاستقرار المستهدف: 3.0x</span>
+            <span>{isEn ? 'Target Stability Benchmark: 3.0x' : 'خط الاستقرار المستهدف: 3.0x'}</span>
           </div>
 
           <div className="h-64 flex items-end gap-2 sm:gap-3 pt-6 pb-2 px-2 border-b border-slate-200 dark:border-slate-800">
@@ -236,8 +260,12 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-16 z-20 bg-slate-900 border border-slate-700 text-white text-[11px] rounded-lg p-2.5 pointer-events-none shadow-xl whitespace-nowrap">
                     <p className="font-bold text-slate-200">{item.fullLabel}</p>
                     <p className="text-[10px] text-slate-400 font-mono">{item.period}</p>
-                    <p className="text-emerald-400 font-bold">العائد (ROAS): {item.roas}x</p>
-                    <p className="text-slate-300">الطلبات: {item.purchases} | ثمن البيعة: {item.cpa} {currency}</p>
+                    <p className="text-emerald-400 font-bold">ROAS: {item.roas}x</p>
+                    <p className="text-slate-300">
+                      {isEn
+                        ? `Orders: ${item.purchases} | CPA: ${item.cpa} ${currency}`
+                        : `الطلبات: ${item.purchases} | ثمن البيعة: ${item.cpa} ${currency}`}
+                    </p>
                   </div>
 
                   <div
@@ -257,7 +285,10 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
                     </div>
                   </div>
 
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 truncate w-full text-center" title={item.fullLabel}>
+                  <span
+                    className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 truncate w-full text-center"
+                    title={item.fullLabel}
+                  >
                     {item.label}
                   </span>
                 </div>
@@ -271,29 +302,43 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
       {chartMode === 'matrix' && (
         <div className="space-y-3">
           <p className="text-xs text-slate-600 dark:text-slate-300">
-            تصنيف الحملات حسب كفاءة الصرف: تحديد الحملات "النجمة" التي تستحق ضخ ميزانيات أعلى، مقابل الحملات الخاسرة.
+            {isEn
+              ? 'Efficiency quadrant classifying Star campaigns worthy of budget scaling vs. bleeding campaigns.'
+              : 'تصنيف الحملات حسب كفاءة الصرف: تحديد الحملات "النجمة" التي تستحق ضخ ميزانيات أعلى، مقابل الحملات الخاسرة.'}
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             {/* Box 1: Stars */}
             <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">🌟 الحملات النجمة (High ROAS, Low CPA)</span>
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                  {isEn
+                    ? '🌟 Star Campaigns (High ROAS, Low CPA)'
+                    : '🌟 الحملات النجمة (High ROAS, Low CPA)'}
+                </span>
                 <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">
-                  {campaigns.filter((c) => c.roas >= 4.0 && c.cpa <= 60).length} سجل
+                  {campaigns.filter((c) => c.roas >= 4.0 && c.cpa <= 60).length}{' '}
+                  {isEn ? 'items' : 'سجل'}
                 </span>
               </div>
               <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
-                تحقق عائداً يفوق 4.0x وثمن بيعة اقتصادي. القرار: رفع الميزانية تدريجياً (Scale Up).
+                {isEn
+                  ? 'Delivers > 4.0x ROAS with economical CPA. Decision: Scale budget gradually.'
+                  : 'تحقق عائداً يفوق 4.0x وثمن بيعة اقتصادي. القرار: رفع الميزانية تدريجياً (Scale Up).'}
               </p>
               <div className="space-y-1">
                 {campaigns
                   .filter((c) => c.roas >= 4.0 && c.cpa <= 60)
                   .slice(0, 3)
                   .map((c, i) => (
-                    <div key={i} className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-emerald-100 dark:border-transparent">
+                    <div
+                      key={i}
+                      className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-emerald-100 dark:border-transparent"
+                    >
                       <span className="truncate max-w-[200px]">{c.adName || c.campaignName}</span>
-                      <span className="text-emerald-700 dark:text-emerald-400 font-bold tabular-nums">{c.roas}x ({c.cpa} {currency})</span>
+                      <span className="text-emerald-700 dark:text-emerald-400 font-bold tabular-nums">
+                        {c.roas}x ({c.cpa} {currency})
+                      </span>
                     </div>
                   ))}
               </div>
@@ -302,22 +347,32 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
             {/* Box 2: Profitable Volume */}
             <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400">💎 الحملات الثابتة والمربحة</span>
+                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400">
+                  {isEn ? '💎 Steady Profitable Campaigns' : '💎 الحملات الثابتة والمربحة'}
+                </span>
                 <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums">
-                  {campaigns.filter((c) => c.roas >= 2.5 && c.roas < 4.0).length} سجل
+                  {campaigns.filter((c) => c.roas >= 2.5 && c.roas < 4.0).length}{' '}
+                  {isEn ? 'items' : 'سجل'}
                 </span>
               </div>
               <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
-                عائد جيد وثابت. القرار: تحسين المحتوى الإعلاني (Creatives) لتقليل الـ CPA.
+                {isEn
+                  ? 'Solid steady ROAS. Decision: Optimize ad creatives to lower CPA further.'
+                  : 'عائد جيد وثابت. القرار: تحسين المحتوى الإعلاني (Creatives) لتقليل الـ CPA.'}
               </p>
               <div className="space-y-1">
                 {campaigns
                   .filter((c) => c.roas >= 2.5 && c.roas < 4.0)
                   .slice(0, 3)
                   .map((c, i) => (
-                    <div key={i} className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-indigo-100 dark:border-transparent">
+                    <div
+                      key={i}
+                      className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-indigo-100 dark:border-transparent"
+                    >
                       <span className="truncate max-w-[200px]">{c.adName || c.campaignName}</span>
-                      <span className="text-indigo-700 dark:text-indigo-400 font-bold tabular-nums">{c.roas}x ({c.cpa} {currency})</span>
+                      <span className="text-indigo-700 dark:text-indigo-400 font-bold tabular-nums">
+                        {c.roas}x ({c.cpa} {currency})
+                      </span>
                     </div>
                   ))}
               </div>
@@ -326,35 +381,51 @@ export const PerformanceCharts: React.FC<PerformanceChartsProps> = ({
             {/* Box 3: Question Marks */}
             <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-amber-700 dark:text-amber-400">⚡ حملات على الحافة (Break-even)</span>
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                  {isEn ? '⚡ Break-even / Borderline' : '⚡ حملات على الحافة (Break-even)'}
+                </span>
                 <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 tabular-nums">
-                  {campaigns.filter((c) => c.roas >= 1.5 && c.roas < 2.5).length} سجل
+                  {campaigns.filter((c) => c.roas >= 1.5 && c.roas < 2.5).length}{' '}
+                  {isEn ? 'items' : 'سجل'}
                 </span>
               </div>
               <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
-                العائد يقترب من تكلفة المنتج. القرار: إعادة ضبط الفئات المستهدفة أو تعديل العرض الترويجي.
+                {isEn
+                  ? 'ROAS is close to product cost. Decision: Refine targeting audiences or promo offer.'
+                  : 'العائد يقترب من تكلفة المنتج. القرار: إعادة ضبط الفئات المستهدفة أو تعديل العرض الترويجي.'}
               </p>
             </div>
 
             {/* Box 4: Bleeders */}
             <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-rose-700 dark:text-rose-400">🛑 حملات مهدورة (نزيف إعلاني)</span>
+                <span className="text-xs font-bold text-rose-700 dark:text-rose-400">
+                  {isEn ? '🛑 Bleeding Campaigns (Low ROAS)' : '🛑 حملات مهدورة (نزيف إعلاني)'}
+                </span>
                 <span className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 tabular-nums">
-                  {campaigns.filter((c) => c.roas < 1.5).length} سجل
+                  {campaigns.filter((c) => c.roas < 1.5).length} {isEn ? 'items' : 'سجل'}
                 </span>
               </div>
               <p className="text-xs text-slate-700 dark:text-slate-300 mb-2">
-                عائد أقل من 1.5x وتكلفة بيعة مرتفعة جداً. القرار: إيقاف فوري لتوفير الميزانية.
+                {isEn
+                  ? 'ROAS below 1.5x with high CPA. Decision: Pause immediately to save budget.'
+                  : 'عائد أقل من 1.5x وتكلفة بيعة مرتفعة جداً. القرار: إيقاف فوري لتوفير الميزانية.'}
               </p>
               <div className="space-y-1">
                 {campaigns
                   .filter((c) => c.roas < 1.5)
                   .slice(0, 3)
                   .map((c, i) => (
-                    <div key={i} className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-rose-100 dark:border-transparent">
-                      <span className="truncate max-w-[200px] text-rose-700 dark:text-rose-300">{c.adName || c.campaignName}</span>
-                      <span className="text-rose-700 dark:text-rose-400 font-bold tabular-nums">{c.roas}x ({c.cpa} {currency})</span>
+                    <div
+                      key={i}
+                      className="text-[11px] text-slate-800 dark:text-slate-200 flex justify-between bg-white dark:bg-slate-900/60 p-1.5 rounded border border-rose-100 dark:border-transparent"
+                    >
+                      <span className="truncate max-w-[200px] text-rose-700 dark:text-rose-300">
+                        {c.adName || c.campaignName}
+                      </span>
+                      <span className="text-rose-700 dark:text-rose-400 font-bold tabular-nums">
+                        {c.roas}x ({c.cpa} {currency})
+                      </span>
                     </div>
                   ))}
               </div>
