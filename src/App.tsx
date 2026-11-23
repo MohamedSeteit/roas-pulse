@@ -963,18 +963,10 @@ function AppContent() {
     setHasUnsavedChanges(true);
   }, [syncDatesFromCampaigns]);
 
-  const handleDownloadSample = useCallback(() => {
-    const sample = generateSampleCSVString();
-    const blob = new Blob(['\ufeff' + sample], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'نموذج_حملات_سناب_تيك_ميتا_جوجل.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+const handleDownloadSample = useCallback(() => {
+    setIsTemplateGuideOpen(true);
   }, []);
-
+  
   const activePeriodDisplayLabel = useMemo(() => {
     if (isAggregatedView) {
       const storedCount = activeClient ? Object.keys(activeClient.months || {}).length : 0;
@@ -1238,6 +1230,10 @@ function AppContent() {
           setAuthModalState({ open: true, tab });
           showToast(msg, 'error');
         }}
+      />
+      <CsvTemplateGuideModal
+        isOpen={isTemplateGuideOpen}
+        onClose={() => setIsTemplateGuideOpen(false)}
       />
 
       <PrintReportModal
