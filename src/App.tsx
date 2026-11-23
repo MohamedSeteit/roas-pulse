@@ -1130,6 +1130,34 @@ export default function App() {
                   onSelectPlatform={setSelectedPlatform}
                 />
               )}
+              {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
+              {reportSettings.visibleSections.platforms && (
+                <PlatformBreakdownCard
+                  platforms={platformBreakdown}
+                  currency={currency}
+                  selectedPlatform={selectedPlatform}
+                  onSelectPlatform={setSelectedPlatform}
+                />
+              )}
+              {/* Row 2: Platform Breakdown (Snapchat, TikTok, Meta, Google) */}
+              {reportSettings.visibleSections.platforms && (
+                <PlatformBreakdownCard
+                  platforms={platformBreakdown}
+                  currency={currency}
+                  selectedPlatform={selectedPlatform}
+                  onSelectPlatform={setSelectedPlatform}
+                />
+              )}
+
+              {/* AI Decision & Growth Center (Stop Bleeding, What-If Simulator, Funnel Leak Finder) */}
+              <DecisionActionCenter
+                adBreakdown={adBreakdown}
+                platforms={platformBreakdown}
+                overallMetrics={overallMetrics}
+                currency={currency}
+                targetCpa={targetCpa}
+                targetRoas={reportSettings.targetRoas}
+              />
 
               {/* Row 3: Interactive Charts */}
               {reportSettings.visibleSections.charts && (
