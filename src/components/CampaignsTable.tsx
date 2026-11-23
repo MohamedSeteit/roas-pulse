@@ -831,7 +831,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
   }, [scopedForAdGroups, selectedAdGroupFilter]);
 
   return (
-    <div className="space-y-6">
+    <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-6">
       {/* 1. Campaigns */}
       <HierarchySectionCard
         level="campaign"
