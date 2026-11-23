@@ -17,8 +17,10 @@ import {
 import {
   getPerformanceTier,
   PLATFORM_NAMES_AR,
+  PLATFORM_NAMES_EN,
   buildHierarchyDrilldown,
 } from '../utils/adMetrics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface CampaignsTableProps {
   campaigns: CampaignData[];
@@ -67,6 +69,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
   onSelectAdGroup,
   onClearFilter,
 }) => {
+  const { isEn } = useLanguage();
   const [metricView, setMetricView] = useState<MetricDisplayMode>('financial');
   const [hideZeroSpend, setHideZeroSpend] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -75,6 +78,8 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  const platformNames = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -153,17 +158,23 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
   );
 
   const exportSectionCSV = () => {
-    const levelLabel =
-      level === 'campaign'
-        ? 'الحملات'
+    const levelLabel = isEn
+      ? level === 'campaign'
+        ? 'Campaigns'
         : level === 'adGroup'
-        ? 'المجموعات_الاعلانية'
-        : 'الاعلانات';
-    const headers =
-      'المستوى,الاسم,المعرف ID,نوع الحملة,الحملة,المجموعة الإعلانية,المنصة,المصروف,المبيعات,العائد ROAS,ثمن البيعة CPA,الطلبات,زيارات الصفحة,الإضافة للسلة,بدء الدفع,الظهور,النقرات\n';
+        ? 'Ad_Sets'
+        : 'Ads'
+      : level === 'campaign'
+      ? 'الحملات'
+      : level === 'adGroup'
+      ? 'المجموعات_الاعلانية'
+      : 'الاعلانات';
+    const headers = isEn
+      ? 'Level,Name,Entity ID,Campaign Type,Campaign,Ad Set,Channel,Spend,Revenue,ROAS,CPA,Orders,Page Views,Add to Cart,Checkouts Initiated,Impressions,Clicks\n'
+      : 'المستوى,الاسم,المعرف ID,نوع الحملة,الحملة,المجموعة الإعلانية,المنصة,المصروف,المبيعات,العائد ROAS,ثمن البيعة CPA,الطلبات,زيارات الصفحة,الإضافة للسلة,بدء الدفع,الظهور,النقرات\n';
     const csvRows = filteredAndSortedRows.map(
       (r) =>
-        `"${levelLabel}","${r.primaryName.replace(/"/g, '""')}","${r.entityId || ''}","${r.campaignType || ''}","${r.campaignName.replace(/"/g, '""')}","${(r.adSetName || '').replace(/"/g, '""')}","${PLATFORM_NAMES_AR[r.platform] || r.platform}",${r.spend},${r.revenue},${r.roas},${r.cpa},${r.purchases},${r.pageViews},${r.addToCart},${r.checkoutsInitiated},${r.impressions},${r.clicks}`
+        `"${levelLabel}","${r.primaryName.replace(/"/g, '""')}","${r.entityId || ''}","${r.campaignType || ''}","${r.campaignName.replace(/"/g, '""')}","${(r.adSetName || '').replace(/"/g, '""')}","${platformNames[r.platform] || r.platform}",${r.spend},${r.revenue},${r.roas},${r.cpa},${r.purchases},${r.pageViews},${r.addToCart},${r.checkoutsInitiated},${r.impressions},${r.clicks}`
     );
     const blob = new Blob(['\ufeff' + headers + csvRows.join('\n')], {
       type: 'text/csv;charset=utf-8;',
@@ -185,11 +196,11 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
 
   const activeFilterLabel =
     level === 'adGroup' && selectedCampaignFilter
-      ? `حملة: ${selectedCampaignFilter}`
+      ? `${isEn ? 'Campaign:' : 'حملة:'} ${selectedCampaignFilter}`
       : level === 'ad' && selectedAdGroupFilter
-      ? `مجموعة: ${selectedAdGroupFilter}`
+      ? `${isEn ? 'Ad Set:' : 'مجموعة:'} ${selectedAdGroupFilter}`
       : level === 'ad' && selectedCampaignFilter
-      ? `حملة: ${selectedCampaignFilter}`
+      ? `${isEn ? 'Campaign:' : 'حملة:'} ${selectedCampaignFilter}`
       : '';
 
   return (
@@ -212,7 +223,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
               <button
                 type="button"
                 onClick={onClearFilter}
-                title="إلغاء التصفية وعرض الكل"
+                title={isEn ? 'Clear filter & show all' : 'إلغاء التصفية وعرض الكل'}
                 className="hover:text-rose-500 cursor-pointer"
               >
                 <XCircle className="w-3.5 h-3.5" />
@@ -220,7 +231,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
             </span>
           )}
 
-          {/* Metric Display Mode Toggle: Financial vs Full Funnel */}
+          {/* Metric Display Mode Toggle */}
           {hasFunnelMetrics && (
             <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
               <button
@@ -233,7 +244,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                 }`}
               >
                 <DollarSign className="w-3 h-3" />
-                <span>الأداء المالي</span>
+                <span>{isEn ? 'Financials' : 'الأداء المالي'}</span>
               </button>
               <button
                 type="button"
@@ -245,7 +256,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                 }`}
               >
                 <Funnel className="w-3 h-3" />
-                <span>قمع التحويل (Funnel)</span>
+                <span>{isEn ? 'Conversion Funnel' : 'قمع التحويل (Funnel)'}</span>
               </button>
             </div>
           )}
@@ -263,7 +274,13 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
             >
               {hideZeroSpend ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
               <span>
-                {hideZeroSpend ? `إظهار المتوقفة (${zeroRowsCount})` : 'إخفاء المتوقفة (0 صرف)'}
+                {hideZeroSpend
+                  ? isEn
+                    ? `Show Paused (${zeroRowsCount})`
+                    : `إظهار المتوقفة (${zeroRowsCount})`
+                  : isEn
+                  ? 'Hide Paused (0 Spend)'
+                  : 'إخفاء المتوقفة (0 صرف)'}
               </span>
             </button>
           )}
@@ -272,14 +289,22 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
         {/* Search, Tier Filter & Export */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-2.5" />
+            <Search
+              className={`w-4 h-4 text-slate-400 absolute ${isEn ? 'left-3' : 'right-3'} top-2.5`}
+            />
             <input
               type="text"
               placeholder={
                 level === 'campaign'
-                  ? 'ابحث باسم الحملة...'
+                  ? isEn
+                    ? 'Search campaign...'
+                    : 'ابحث باسم الحملة...'
                   : level === 'adGroup'
-                  ? 'ابحث بالمجموعة أو ID...'
+                  ? isEn
+                    ? 'Search ad set or ID...'
+                    : 'ابحث بالمجموعة أو ID...'
+                  : isEn
+                  ? 'Search ad or ID...'
                   : 'ابحث بالإعلان أو ID...'
               }
               value={searchTerm}
@@ -287,14 +312,16 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 text-slate-900 dark:text-slate-200 text-xs rounded-xl pr-9 pl-3 py-2 w-44 sm:w-52 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              className={`bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 text-slate-900 dark:text-slate-200 text-xs rounded-xl ${
+                isEn ? 'pl-9 pr-3' : 'pr-9 pl-3'
+              } py-2 w-44 sm:w-52 focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-slate-400 dark:placeholder:text-slate-500`}
             />
           </div>
 
           <div className="flex items-center bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 rounded-xl px-2 py-1.5 text-xs">
-            <Filter className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ml-1.5" />
+            <Filter className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${isEn ? 'mr-1.5' : 'ml-1.5'}`} />
             <select
-              aria-label="تصفية حسب تقييم الأداء"
+              aria-label={isEn ? 'Filter by performance tier' : 'تصفية حسب تقييم الأداء'}
               value={tierFilter}
               onChange={(e) => {
                 setTierFilter(e.target.value as any);
@@ -303,19 +330,19 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
               className="bg-transparent text-slate-900 dark:text-slate-200 font-medium focus:outline-none cursor-pointer"
             >
               <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
-                كافة المستويات
+                {isEn ? 'All Tiers' : 'كافة المستويات'}
               </option>
               <option value="exceptional" className="bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400">
-                استثنائي (ROAS &gt; 4.0x)
+                {isEn ? 'Exceptional (ROAS > 4.0x)' : 'استثنائي (ROAS > 4.0x)'}
               </option>
               <option value="good" className="bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300">
-                أداء قوي وناجح
+                {isEn ? 'Strong & Profitable' : 'أداء قوي وناجح'}
               </option>
               <option value="average" className="bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400">
-                متوسط يحتاج تحسين
+                {isEn ? 'Average • Needs Optimization' : 'متوسط يحتاج تحسين'}
               </option>
               <option value="poor" className="bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-400">
-                مهدور / خاسر
+                {isEn ? 'Bleeding / Loss' : 'مهدور / خاسر'}
               </option>
             </select>
           </div>
@@ -333,7 +360,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40">
-        <table className="w-full text-right text-xs">
+        <table className={`w-full ${isEn ? 'text-left' : 'text-right'} text-xs`}>
           <thead className="bg-slate-100 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
             <tr>
               <th
@@ -343,9 +370,15 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                 <div className="flex items-center gap-1">
                   <span>
                     {level === 'campaign'
-                      ? 'اسم الحملة'
+                      ? isEn
+                        ? 'Campaign Name'
+                        : 'اسم الحملة'
                       : level === 'adGroup'
-                      ? 'اسم المجموعة الإعلانية'
+                      ? isEn
+                        ? 'Ad Set Name'
+                        : 'اسم المجموعة الإعلانية'
+                      : isEn
+                      ? 'Ad Name'
                       : 'اسم الإعلان'}
                   </span>
                   <ArrowUpDown className="w-3 h-3" />
@@ -354,26 +387,38 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
 
               <th className="py-3 px-3 whitespace-nowrap">
                 {level === 'campaign'
-                  ? 'نوع الحملة'
+                  ? isEn
+                    ? 'Type'
+                    : 'نوع الحملة'
                   : level === 'adGroup'
-                  ? 'معرّف المجموعة (ID)'
+                  ? isEn
+                    ? 'Ad Set ID'
+                    : 'معرّف المجموعة (ID)'
+                  : isEn
+                  ? 'Ad ID'
                   : 'معرّف الإعلان (ID)'}
               </th>
 
               {level !== 'campaign' && (
                 <th className="py-3 px-3 whitespace-nowrap">
-                  {level === 'adGroup' ? 'الحملة التابعة لها' : 'المجموعة / الحملة'}
+                  {level === 'adGroup'
+                    ? isEn
+                      ? 'Parent Campaign'
+                      : 'الحملة التابعة لها'
+                    : isEn
+                    ? 'Ad Set / Campaign'
+                    : 'المجموعة / الحملة'}
                 </th>
               )}
 
-              <th className="py-3 px-3 whitespace-nowrap">المنصة</th>
+              <th className="py-3 px-3 whitespace-nowrap">{isEn ? 'Channel' : 'المنصة'}</th>
 
               <th
                 onClick={() => handleSort('spend')}
                 className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
               >
                 <div className="flex items-center gap-1">
-                  <span>المصروف</span>
+                  <span>{isEn ? 'Spend' : 'المصروف'}</span>
                   <ArrowUpDown className="w-3 h-3" />
                 </div>
               </th>
@@ -385,7 +430,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>المبيعات</span>
+                      <span>{isEn ? 'Revenue' : 'المبيعات'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -394,7 +439,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>العائد (ROAS)</span>
+                      <span>ROAS</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -403,7 +448,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>ثمن البيعة (CPA)</span>
+                      <span>CPA</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -412,7 +457,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الطلبات</span>
+                      <span>{isEn ? 'Orders' : 'الطلبات'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -421,7 +466,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الظهور / النقرات</span>
+                      <span>{isEn ? 'Impressions / Clicks' : 'الظهور / النقرات'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -433,7 +478,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الظهور</span>
+                      <span>{isEn ? 'Impressions' : 'الظهور'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -442,7 +487,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>النقرات</span>
+                      <span>{isEn ? 'Clicks' : 'النقرات'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -451,7 +496,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>زيارات الصفحة</span>
+                      <span>{isEn ? 'Page Views' : 'زيارات الصفحة'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -460,7 +505,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>إضافة للسلة</span>
+                      <span>{isEn ? 'Add to Cart' : 'إضافة للسلة'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -469,7 +514,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>بدء الدفع</span>
+                      <span>{isEn ? 'Checkouts' : 'بدء الدفع'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -478,14 +523,16 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     className="py-3 px-3 cursor-pointer hover:text-slate-900 dark:hover:text-white whitespace-nowrap"
                   >
                     <div className="flex items-center gap-1">
-                      <span>الشراء</span>
+                      <span>{isEn ? 'Purchases' : 'الشراء'}</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
                 </>
               )}
 
-              <th className="py-3 px-3 text-center whitespace-nowrap">التقييم</th>
+              <th className="py-3 px-3 text-center whitespace-nowrap">
+                {isEn ? 'Rating' : 'التقييم'}
+              </th>
             </tr>
           </thead>
 
@@ -493,7 +540,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
             {paginatedRows.length === 0 ? (
               <tr>
                 <td colSpan={11} className="py-8 text-center text-slate-500">
-                  لا توجد عناصر مطابقة في هذا المستوى.
+                  {isEn ? 'No matching items at this level.' : 'لا توجد عناصر مطابقة في هذا المستوى.'}
                 </td>
               </tr>
             ) : (
@@ -523,28 +570,48 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                           <button
                             type="button"
                             onClick={() => onSelectCampaign(r.campaignName)}
-                            title="تصفية المجموعات والإعلانات التابعة لهذه الحملة"
+                            title={
+                              isEn
+                                ? 'Filter ad sets and ads under this campaign'
+                                : 'تصفية المجموعات والإعلانات التابعة لهذه الحملة'
+                            }
                             className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 cursor-pointer ${
                               isSelectedCampaign
                                 ? 'bg-indigo-600 text-white'
                                 : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
                             }`}
                           >
-                            {isSelectedCampaign ? 'محددة ✓' : 'تصفية ↓'}
+                            {isSelectedCampaign
+                              ? isEn
+                                ? 'Selected ✓'
+                                : 'محددة ✓'
+                              : isEn
+                              ? 'Filter ↓'
+                              : 'تصفية ↓'}
                           </button>
                         )}
                         {level === 'adGroup' && onSelectAdGroup && (
                           <button
                             type="button"
                             onClick={() => onSelectAdGroup(r.adSetName || r.primaryName)}
-                            title="تصفية الإعلانات التابعة لهذه المجموعة"
+                            title={
+                              isEn
+                                ? 'Filter ads under this ad set'
+                                : 'تصفية الإعلانات التابعة لهذه المجموعة'
+                            }
                             className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 cursor-pointer ${
                               isSelectedAdGroup
                                 ? 'bg-indigo-600 text-white'
                                 : 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300'
                             }`}
                           >
-                            {isSelectedAdGroup ? 'محددة ✓' : 'تصفية ↓'}
+                            {isSelectedAdGroup
+                              ? isEn
+                                ? 'Selected ✓'
+                                : 'محددة ✓'
+                              : isEn
+                              ? 'Filter ↓'
+                              : 'تصفية ↓'}
                           </button>
                         )}
                       </div>
@@ -559,7 +626,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     <td className="py-3 px-3 whitespace-nowrap">
                       {level === 'campaign' ? (
                         <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300">
-                          {r.campaignType || 'قياسي'}
+                          {r.campaignType || (isEn ? 'Standard' : 'قياسي')}
                         </span>
                       ) : (
                         <span
@@ -599,7 +666,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                     {/* 4. Platform */}
                     <td className="py-3 px-3 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60">
-                        {PLATFORM_NAMES_AR[r.platform] || r.platform}
+                        {platformNames[r.platform] || r.platform}
                       </span>
                     </td>
 
@@ -635,9 +702,11 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                           {r.purchases}
                         </td>
                         <td className="py-3 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap tabular-nums">
-                          <div>{r.impressions.toLocaleString()} ظهور</div>
+                          <div>
+                            {r.impressions.toLocaleString()} {isEn ? 'impr.' : 'ظهور'}
+                          </div>
                           <span className="text-[10px] text-slate-500">
-                            {r.clicks.toLocaleString()} نقرة ({r.ctr}%)
+                            {r.clicks.toLocaleString()} {isEn ? 'clicks' : 'نقرة'} ({r.ctr}%)
                           </span>
                         </td>
                       </>
@@ -671,11 +740,11 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap tabular-nums">
                           <div className="font-bold text-emerald-700 dark:text-emerald-400">
-                            {r.purchases} طلب ({r.roas}x)
+                            {r.purchases} {isEn ? 'orders' : 'طلب'} ({r.roas}x)
                           </div>
                           {r.checkoutToPurchaseRate > 0 && (
                             <span className="text-[10px] text-slate-500">
-                              إتمام الدفع: {r.checkoutToPurchaseRate}%
+                              {isEn ? 'Checkout Conv:' : 'إتمام الدفع:'} {r.checkoutToPurchaseRate}%
                             </span>
                           )}
                         </td>
@@ -686,7 +755,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold border ${tierInfo.badgeColor}`}
                       >
-                        {tierInfo.labelAr}
+                        {isEn ? tierInfo.labelEn || tierInfo.labelAr : tierInfo.labelAr}
                       </span>
                     </td>
                   </tr>
@@ -701,7 +770,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 pt-2">
           <span>
-            الصفحة {currentPage} من {totalPages}
+            {isEn ? `Page ${currentPage} of ${totalPages}` : `الصفحة ${currentPage} من ${totalPages}`}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -714,7 +783,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                   : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
               }`}
             >
-              السابق
+              {isEn ? 'Previous' : 'السابق'}
             </button>
             <button
               type="button"
@@ -726,7 +795,7 @@ const HierarchySectionCard: React.FC<HierarchySectionCardProps> = ({
                   : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
               }`}
             >
-              التالي
+              {isEn ? 'Next' : 'التالي'}
             </button>
           </div>
         </div>
@@ -740,6 +809,7 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
   currency,
   avgCpa,
 }) => {
+  const { isEn } = useLanguage();
   const [selectedCampaignFilter, setSelectedCampaignFilter] = useState<string>('');
   const [selectedAdGroupFilter, setSelectedAdGroupFilter] = useState<string>('');
 
@@ -762,10 +832,10 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. التحليل المفصّل (حملات) */}
+      {/* 1. Campaigns */}
       <HierarchySectionCard
         level="campaign"
-        title="التحليل المفصّل (حملات)"
+        title={isEn ? 'Detailed Breakdown (Campaigns)' : 'التحليل المفصّل (حملات)'}
         campaigns={campaigns}
         currency={currency}
         avgCpa={avgCpa}
@@ -776,10 +846,10 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
         }}
       />
 
-      {/* 2. التحليل المفصّل (مجموعات إعلانية) */}
+      {/* 2. Ad Sets */}
       <HierarchySectionCard
         level="adGroup"
-        title="التحليل المفصّل (مجموعات إعلانية)"
+        title={isEn ? 'Detailed Breakdown (Ad Sets)' : 'التحليل المفصّل (مجموعات إعلانية)'}
         campaigns={scopedForAdGroups}
         currency={currency}
         avgCpa={avgCpa}
@@ -794,10 +864,10 @@ export const CampaignsTable: React.FC<CampaignsTableProps> = ({
         }}
       />
 
-      {/* 3. التحليل المفصّل (إعلانات) */}
+      {/* 3. Ads */}
       <HierarchySectionCard
         level="ad"
-        title="التحليل المفصّل (إعلانات)"
+        title={isEn ? 'Detailed Breakdown (Ads)' : 'التحليل المفصّل (إعلانات)'}
         campaigns={scopedForAds}
         currency={currency}
         avgCpa={avgCpa}
