@@ -13,7 +13,8 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { AIAnalysisResult, CampaignData, AdPlatform } from '../types/campaign';
-import { PLATFORM_NAMES_AR } from '../utils/adMetrics';
+import { PLATFORM_NAMES_AR, PLATFORM_NAMES_EN } from '../utils/adMetrics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface AiAnalysisCardProps {
   analysis: AIAnalysisResult | null;
@@ -34,12 +35,32 @@ export const AiAnalysisCard: React.FC<AiAnalysisCardProps> = ({
   historicalMonthsCount = 0,
   clientName,
 }) => {
+  const { isEn } = useLanguage();
   const [activeTab, setActiveTab] = useState<'summary' | 'daily' | 'platforms' | 'cpa' | 'budget' | 'actions'>('summary');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     if (!analysis) return;
-    const text = `=== تقرير تحليل أداء الحملات الإعلانية بواسطة الذكاء الاصطناعي ===\n
+    const text = isEn
+      ? `=== AI Campaign Performance Report ===\n
+Generated At: ${analysis.generatedAt}
+Executive Summary:
+${analysis.executiveSummary}
+
+Period Assessment:
+${analysis.periodAssessment}
+
+CPA Analysis:
+- Status: ${analysis.cpaAnalysis.status}
+- Comment: ${analysis.cpaAnalysis.comment}
+- Highest CPA Campaign: ${analysis.cpaAnalysis.highestCpaCampaign}
+- Lowest CPA Campaign: ${analysis.cpaAnalysis.lowestCpaCampaign}
+- Estimated Waste: ${analysis.cpaAnalysis.wasteEstimate} ${currency}
+
+Top Actionable Recommendations:
+${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+`
+      : `=== تقرير تحليل أداء الحملات الإعلانية بواسطة الذكاء الاصطناعي ===\n
 تاريخ التحليل: ${analysis.generatedAt}
 التعليق التنفيذي:
 ${analysis.executiveSummary}
@@ -65,20 +86,35 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
   const getPlatformStatusBadge = (status: string) => {
     switch (status) {
       case 'winner':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">منصة رابحة بامتياز ⭐</span>;
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+            {isEn ? 'Top Winner ⭐' : 'منصة رابحة بامتياز ⭐'}
+          </span>
+        );
       case 'promising':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">أداء إيجابي واعد 👍</span>;
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
+            {isEn ? 'Strong & Promising 👍' : 'أداء إيجابي واعد 👍'}
+          </span>
+        );
       case 'needs_optimization':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">تحتاج تحسين الاستهداف ⚠️</span>;
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+            {isEn ? 'Needs Optimization ⚠️' : 'تحتاج تحسين الاستهداف ⚠️'}
+          </span>
+        );
       case 'underperforming':
       default:
-        return <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">هدر وتكلفة مرتفعة 🛑</span>;
+        return (
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30">
+            {isEn ? 'High CPA / Bleeding 🛑' : 'هدر وتكلفة مرتفعة 🛑'}
+          </span>
+        );
     }
   };
 
   return (
     <div className="rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-gradient-to-b from-indigo-50/70 via-white to-white dark:from-indigo-950/40 dark:via-slate-900/90 dark:to-slate-900 p-5 shadow-md dark:shadow-xl relative overflow-hidden transition-colors">
-      {/* Decorative background glow */}
       <div className="absolute top-0 right-1/4 w-96 h-32 bg-indigo-500/10 blur-3xl pointer-events-none rounded-full" />
       <div className="absolute bottom-0 left-10 w-72 h-32 bg-purple-500/10 blur-3xl pointer-events-none rounded-full" />
 
@@ -91,19 +127,25 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white font-sans">
-                تقرير واستشارات الذكاء الاصطناعي (AI Campaign Intelligence)
+                {isEn
+                  ? 'AI Campaign Intelligence & Consultant'
+                  : 'تقرير واستشارات الذكاء الاصطناعي (AI Campaign Intelligence)'}
               </h2>
               <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                 {analysis?.aiModelLabel || 'Gemini 4 Hydrogen'}
               </span>
               {historicalMonthsCount > 0 && (
                 <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                  يتعلم من {historicalMonthsCount} أشهر سابقة {clientName ? `(${clientName})` : ''}
+                  {isEn
+                    ? `Learning from ${historicalMonthsCount} prior months ${clientName ? `(${clientName})` : ''}`
+                    : `يتعلم من ${historicalMonthsCount} أشهر سابقة ${clientName ? `(${clientName})` : ''}`}
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              تحليل عميق للعائد على الإنفاق (ROAS)، وثمن البيعة (CPA)، والتفصيل اليومي والإعلانات، والتعلم من بيانات العميل المخزنة شهر بعد شهر
+              {isEn
+                ? 'Deep analysis of ROAS, CPA, daily pacing, ad creatives, and month-over-month client learning'
+                : 'تحليل عميق للعائد على الإنفاق (ROAS)، وثمن البيعة (CPA)، والتفصيل اليومي والإعلانات، والتعلم من بيانات العميل المخزنة شهر بعد شهر'}
             </p>
           </div>
         </div>
@@ -113,17 +155,19 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             <button
               onClick={handleCopy}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
-              title="نسخ ملخص التقرير"
+              title={isEn ? 'Copy Report Summary' : 'نسخ ملخص التقرير'}
             >
               {copied ? (
                 <>
                   <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-emerald-600 dark:text-emerald-400">تم النسخ</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    {isEn ? 'Copied' : 'تم النسخ'}
+                  </span>
                 </>
               ) : (
                 <>
                   <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-                  <span>نسخ التقرير</span>
+                  <span>{isEn ? 'Copy Report' : 'نسخ التقرير'}</span>
                 </>
               )}
             </button>
@@ -139,7 +183,15 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             }`}
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{analysis ? 'إعادة تحليل الأداء' : 'بدء تحليل الحملات بالذكاء الاصطناعي'}</span>
+            <span>
+              {analysis
+                ? isEn
+                  ? 'Re-run AI Analysis'
+                  : 'إعادة تحليل الأداء'
+                : isEn
+                ? 'Run AI Campaign Analysis'
+                : 'بدء تحليل الحملات بالذكاء الاصطناعي'}
+            </span>
           </button>
         </div>
       </div>
@@ -153,10 +205,14 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           </div>
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              جاري تحليل بيانات الحملات بالذكاء الاصطناعي...
+              {isEn
+                ? 'Analyzing campaign metrics with AI...'
+                : 'جاري تحليل بيانات الحملات بالذكاء الاصطناعي...'}
             </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-md mx-auto">
-              نقوم بفحص معدلات الـ ROAS، وحساب ثمن البيعة لكل منصة، وتحديد الحملات المهدورة لاقتراح خطة تحسين فورية.
+              {isEn
+                ? 'Auditing ROAS, calculating CPA across channels, and identifying wasted spend to generate an instant growth plan.'
+                : 'نقوم بفحص معدلات الـ ROAS، وحساب ثمن البيعة لكل منصة، وتحديد الحملات المهدورة لاقتراح خطة تحسين فورية.'}
             </p>
           </div>
         </div>
@@ -169,9 +225,13 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             <Sparkles className="w-6 h-6" />
           </div>
           <div className="max-w-md mx-auto">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-200">التحليل الذكي جاهز للانطلاق</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-200">
+              {isEn ? 'AI Intelligence Ready' : 'التحليل الذكي جاهز للانطلاق'}
+            </h3>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-              اضغط على زر "بدء تحليل الحملات بالذكاء الاصطناعي" للحصول على تقرير استراتيجي مفصل وتعليق تنفيذي لتحسين أداء الحملات خلال الفترة المحددة.
+              {isEn
+                ? 'Click "Run AI Campaign Analysis" to generate a detailed strategic report and executive commentary for the selected period.'
+                : 'اضغط على زر "بدء تحليل الحملات بالذكاء الاصطناعي" للحصول على تقرير استراتيجي مفصل وتعليق تنفيذي لتحسين أداء الحملات خلال الفترة المحددة.'}
             </p>
           </div>
         </div>
@@ -183,12 +243,12 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           {/* Sub Navigation Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800/80 text-xs scrollbar-none">
             {[
-              { id: 'summary', label: 'التعليق التنفيذي العام', icon: Award },
-              { id: 'daily', label: 'تحليل يوم بيوم والإعلانات', icon: CalendarDays },
-              { id: 'platforms', label: 'تحليل المنصات الأربعة', icon: TrendingUp },
-              { id: 'cpa', label: 'تحليل ثمن البيعة والهدر', icon: AlertTriangle },
-              { id: 'budget', label: 'خطة إعادة توزيع الميزانية', icon: ArrowRightLeft },
-              { id: 'actions', label: 'توصيات فورية للتحسين', icon: Lightbulb },
+              { id: 'summary', label: isEn ? 'Executive Summary' : 'التعليق التنفيذي العام', icon: Award },
+              { id: 'daily', label: isEn ? 'Daily & Ad Insights' : 'تحليل يوم بيوم والإعلانات', icon: CalendarDays },
+              { id: 'platforms', label: isEn ? 'Channels Breakdown' : 'تحليل المنصات الأربعة', icon: TrendingUp },
+              { id: 'cpa', label: isEn ? 'CPA & Waste Audit' : 'تحليل ثمن البيعة والهدر', icon: AlertTriangle },
+              { id: 'budget', label: isEn ? 'Budget Reallocation' : 'خطة إعادة توزيع الميزانية', icon: ArrowRightLeft },
+              { id: 'actions', label: isEn ? 'Action Plan' : 'توصيات فورية للتحسين', icon: Lightbulb },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -214,7 +274,7 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-4">
                 <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider block mb-1">
-                  التعليق التنفيذي على أداء الحملات
+                  {isEn ? 'Executive Performance Commentary' : 'التعليق التنفيذي على أداء الحملات'}
                 </span>
                 <p className="text-sm text-slate-900 dark:text-slate-100 leading-relaxed font-sans">
                   {analysis.executiveSummary}
@@ -226,7 +286,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                   <TrendingUp className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300">تقييم الفترة والانتشار الإعلاني</h4>
+                  <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                    {isEn ? 'Period & Reach Assessment' : 'تقييم الفترة والانتشار الإعلاني'}
+                  </h4>
                   <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-normal">
                     {analysis.periodAssessment}
                   </p>
@@ -236,13 +298,15 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               {analysis.historicalComparison && (
                 <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 p-4 space-y-2">
                   <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                    التعلم التاريخي ومقارنة الأشهر السابقة (Client MoM Memory)
+                    {isEn
+                      ? 'Historical Learning & Month-over-Month Comparison'
+                      : 'التعلم التاريخي ومقارنة الأشهر السابقة (Client MoM Memory)'}
                   </h4>
                   <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed">
                     {analysis.historicalComparison.trendVsPreviousMonths}
                   </p>
                   {analysis.historicalComparison.learnedPatterns?.length > 0 && (
-                    <ul className="text-xs text-emerald-800 dark:text-emerald-100/90 space-y-1 list-disc pr-4">
+                    <ul className={`text-xs text-emerald-800 dark:text-emerald-100/90 space-y-1 list-disc ${isEn ? 'pl-4' : 'pr-4'}`}>
                       {analysis.historicalComparison.learnedPatterns.map((pat, i) => (
                         <li key={i}>{pat}</li>
                       ))}
@@ -250,15 +314,16 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                   )}
                   {analysis.historicalComparison.nextMonthTargets && (
                     <p className="text-[11px] text-indigo-800 dark:text-indigo-200 pt-1 border-t border-emerald-200 dark:border-emerald-500/20">
-                      <strong>أهداف الشهر القادم: </strong>
+                      <strong>{isEn ? 'Next Month Targets: ' : 'أهداف الشهر القادم: '}</strong>
                       {analysis.historicalComparison.nextMonthTargets}
                     </p>
                   )}
                 </div>
               )}
 
-              <div className="text-[11px] text-slate-500 text-left">
-                تم إنشاء هذا التقرير تلقائياً: {analysis.generatedAt}
+              <div className={`text-[11px] text-slate-500 ${isEn ? 'text-right' : 'text-left'}`}>
+                {isEn ? 'Generated automatically at: ' : 'تم إنشاء هذا التقرير تلقائياً: '}
+                {analysis.generatedAt}
               </div>
             </div>
           )}
@@ -270,7 +335,7 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-4 space-y-1.5">
                     <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 block">
-                      قراءة المسار اليومي (Day-by-Day Trend)
+                      {isEn ? 'Day-by-Day Trend Reading' : 'قراءة المسار اليومي (Day-by-Day Trend)'}
                     </span>
                     <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
                       {analysis.dailyInsights.trendSummary}
@@ -282,7 +347,7 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-4 space-y-1.5">
                     <span className="text-xs font-bold text-purple-700 dark:text-purple-300 block">
-                      توجيه الصرف اليومي (Daily Pacing)
+                      {isEn ? 'Daily Pacing Guidance' : 'توجيه الصرف اليومي (Daily Pacing)'}
                     </span>
                     <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
                       {analysis.dailyInsights.dailyPacingAdvice}
@@ -295,9 +360,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                 <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-500/30 p-3.5 space-y-1.5">
                   <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    تنبيهات الإجهاد الإعلاني وتقلبات الأيام:
+                    {isEn ? 'Ad Fatigue & Daily Volatility Alerts:' : 'تنبيهات الإجهاد الإعلاني وتقلبات الأيام:'}
                   </span>
-                  <ul className="text-xs text-amber-900 dark:text-amber-100/90 space-y-1 pr-4 list-disc">
+                  <ul className={`text-xs text-amber-900 dark:text-amber-100/90 space-y-1 list-disc ${isEn ? 'pl-4' : 'pr-4'}`}>
                     {analysis.dailyInsights.fatigueWarnings.map((w, i) => (
                       <li key={i}>{w}</li>
                     ))}
@@ -308,15 +373,27 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               {analysis.adLevelRecommendations && analysis.adLevelRecommendations.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    قرارات فورية على مستوى كل إعلان (Ad-Level Decisions):
+                    {isEn ? 'Ad-Level Decisions:' : 'قرارات فورية على مستوى كل إعلان (Ad-Level Decisions):'}
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                     {analysis.adLevelRecommendations.map((item, idx) => {
                       const badgeMap: Record<string, { label: string; cls: string }> = {
-                        scale: { label: 'مضاعفة الميزانية (Scale)', cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' },
-                        refresh_creative: { label: 'تجديد الكرياتيف (Refresh)', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
-                        pause: { label: 'إيقاف فوري (Pause)', cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30' },
-                        optimize: { label: 'تحسين الاستهداف (Optimize)', cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
+                        scale: {
+                          label: isEn ? 'Scale Budget' : 'مضاعفة الميزانية (Scale)',
+                          cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+                        },
+                        refresh_creative: {
+                          label: isEn ? 'Refresh Creative' : 'تجديد الكرياتيف (Refresh)',
+                          cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+                        },
+                        pause: {
+                          label: isEn ? 'Pause Immediately' : 'إيقاف فوري (Pause)',
+                          cls: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30',
+                        },
+                        optimize: {
+                          label: isEn ? 'Optimize Targeting' : 'تحسين الاستهداف (Optimize)',
+                          cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
+                        },
                       };
                       const badge = badgeMap[item.action] || badgeMap.optimize;
                       return (
@@ -344,7 +421,8 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           {activeTab === 'platforms' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-in fade-in duration-200">
               {analysis.platformHighlights.map((ph, idx) => {
-                const name = PLATFORM_NAMES_AR[ph.platform as AdPlatform] || ph.platform;
+                const nameMap = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
+                const name = nameMap[ph.platform as AdPlatform] || ph.platform;
                 return (
                   <div
                     key={idx}
@@ -362,12 +440,16 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
 
                     <div className="pt-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">العائد (ROAS):</span>
-                        <span className="font-black text-indigo-700 dark:text-indigo-300 mr-1.5 tabular-nums">{ph.roas}x</span>
+                        <span className="text-slate-500 dark:text-slate-400">ROAS:</span>
+                        <span className={`font-black text-indigo-700 dark:text-indigo-300 ${isEn ? 'ml-1.5' : 'mr-1.5'} tabular-nums`}>
+                          {ph.roas}x
+                        </span>
                       </div>
                       <div>
-                        <span className="text-slate-500 dark:text-slate-400">ثمن البيعة (CPA):</span>
-                        <span className="font-black text-emerald-700 dark:text-emerald-300 mr-1.5 tabular-nums">{ph.cpa} {currency}</span>
+                        <span className="text-slate-500 dark:text-slate-400">CPA:</span>
+                        <span className={`font-black text-emerald-700 dark:text-emerald-300 ${isEn ? 'ml-1.5' : 'mr-1.5'} tabular-nums`}>
+                          {ph.cpa} {currency}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -381,17 +463,23 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
             <div className="space-y-3 animate-in fade-in duration-200">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-3.5">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">حالة تكلفة الاكتساب (CPA)</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {isEn ? 'CPA Status' : 'حالة تكلفة الاكتساب (CPA)'}
+                  </span>
                   <p className="text-base font-bold text-slate-900 dark:text-white mt-1">{analysis.cpaAnalysis.status}</p>
                 </div>
                 <div className="rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 p-3.5">
-                  <span className="text-xs text-rose-700 dark:text-rose-300">أعلى حملة تكلفة للبيعة (نزيف مالي)</span>
+                  <span className="text-xs text-rose-700 dark:text-rose-300">
+                    {isEn ? 'Highest CPA Campaign (Bleeding)' : 'أعلى حملة تكلفة للبيعة (نزيف مالي)'}
+                  </span>
                   <p className="text-xs font-bold text-rose-900 dark:text-rose-200 mt-1 truncate" title={analysis.cpaAnalysis.highestCpaCampaign}>
                     {analysis.cpaAnalysis.highestCpaCampaign}
                   </p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/30 p-3.5">
-                  <span className="text-xs text-emerald-700 dark:text-emerald-300">أقل وأفضل حملة تكلفة (بطلة التحويل)</span>
+                  <span className="text-xs text-emerald-700 dark:text-emerald-300">
+                    {isEn ? 'Lowest CPA Campaign (Hero)' : 'أقل وأفضل حملة تكلفة (بطلة التحويل)'}
+                  </span>
                   <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 mt-1 truncate" title={analysis.cpaAnalysis.lowestCpaCampaign}>
                     {analysis.cpaAnalysis.lowestCpaCampaign}
                   </p>
@@ -399,7 +487,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               </div>
 
               <div className="rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 p-4">
-                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200 mb-1">تفاصيل أداء ثمن البيعة</h4>
+                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200 mb-1">
+                  {isEn ? 'CPA Performance Details' : 'تفاصيل أداء ثمن البيعة'}
+                </h4>
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                   {analysis.cpaAnalysis.comment}
                 </p>
@@ -408,7 +498,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                   <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center justify-between text-xs">
                     <span className="text-amber-800 dark:text-amber-300 font-medium flex items-center gap-1.5">
                       <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                      تقدير الميزانية المهدرة على حملات دون العائد المستهدف:
+                      {isEn
+                        ? 'Estimated wasted spend on below-target campaigns:'
+                        : 'تقدير الميزانية المهدرة على حملات دون العائد المستهدف:'}
                     </span>
                     <span className="font-bold text-amber-900 dark:text-amber-200 text-sm tabular-nums">
                       ~ {analysis.cpaAnalysis.wasteEstimate.toLocaleString()} {currency}
@@ -423,12 +515,16 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
           {activeTab === 'budget' && (
             <div className="space-y-3 animate-in fade-in duration-200">
               <p className="text-xs text-slate-700 dark:text-slate-300">
-                مقترح إعادة تدوير السيولة الإعلانية لتحقيق أكبر قفزة في المبيعات دون زيادة إجمالي الصرف:
+                {isEn
+                  ? 'Recommended budget reallocation to maximize revenue without increasing total ad spend:'
+                  : 'مقترح إعادة تدوير السيولة الإعلانية لتحقيق أكبر قفزة في المبيعات دون زيادة إجمالي الصرف:'}
               </p>
 
               {analysis.budgetReallocationPlan.length === 0 ? (
                 <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
-                  توزيع الميزانية الحالي متوازن بشكل كافٍ بين المنصات.
+                  {isEn
+                    ? 'Current budget distribution across channels is well balanced.'
+                    : 'توزيع الميزانية الحالي متوازن بشكل كافٍ بين المنصات.'}
                 </div>
               ) : (
                 analysis.budgetReallocationPlan.map((plan, idx) => (
@@ -439,11 +535,11 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold">
-                          سحب من: {plan.fromPlatform}
+                          {isEn ? `Pull from: ${plan.fromPlatform}` : `سحب من: ${plan.fromPlatform}`}
                         </span>
                         <ArrowRightLeft className="w-3.5 h-3.5 text-slate-400" />
                         <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold">
-                          تحويل إلى: {plan.toPlatform}
+                          {isEn ? `Shift to: ${plan.toPlatform}` : `تحويل إلى: ${plan.toPlatform}`}
                         </span>
                       </div>
                       <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 px-2 py-0.5 rounded border border-indigo-500/30">
@@ -466,7 +562,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
               <div>
                 <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200 mb-2 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  خطوات عملية عاجلة للتحسين خلال الفترة الحالية:
+                  {isEn
+                    ? 'Immediate Action Steps for Current Period:'
+                    : 'خطوات عملية عاجلة للتحسين خلال الفترة الحالية:'}
                 </h4>
                 <div className="space-y-2">
                   {analysis.actionableRecommendations.map((rec, i) => (
@@ -487,7 +585,9 @@ ${analysis.actionableRecommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200 mb-2 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    فرص التوسع ومضاعفة المبيعات (Scaling Opportunities):
+                    {isEn
+                      ? 'Scaling & Revenue Growth Opportunities:'
+                      : 'فرص التوسع ومضاعفة المبيعات (Scaling Opportunities):'}
                   </h4>
                   <div className="space-y-2">
                     {analysis.scalingOpportunities.map((opp, i) => (
