@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { CsvTemplateGuideModal } from './components/CsvTemplateGuideModal';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Upload, Link2, Sparkles } from 'lucide-react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
