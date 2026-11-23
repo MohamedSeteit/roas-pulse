@@ -651,7 +651,6 @@ app.post(
       return;
     }
 
-    // Fast path: if the deterministic parser already recognizes standard tabular columns and extracts rows cleanly, return immediately
     const deterministicParsed = parseCampaignCSV(rawText, { platformHint, fileName });
     if (
       deterministicParsed.data.length > 0 &&
@@ -671,7 +670,6 @@ app.post(
     const lines = rawText.replace(/^\uFEFF/, '').split(/\r?\n/);
     const samplePreview = lines.slice(0, 15).join('\n').slice(0, 2200);
 
-    // If Gemini client is unavailable, use the deterministic multi-platform parser
     if (!ai || !apiKey) {
       res.json({
         campaigns: deterministicParsed.data,
@@ -796,7 +794,6 @@ ${samplePreview}
       return;
     }
 
-    // Non-tabular fallback extraction from Gemini
     const rows = Array.isArray(aiJson.extractedRows) ? aiJson.extractedRows : [];
     const today = new Date().toISOString().split('T')[0];
     const campaigns: CampaignData[] = rows.map((r: any, idx: number) => {
@@ -880,10 +877,11 @@ app.post(
   aiDailyLimiter,
   async (req: Request, res: Response) => {
   try {
-    const { campaigns, dateRange, targetCpa, clientProfile, historicalMonths } = req.body as {
+    const { campaigns, dateRange, targetCpa, clientProfile, historicalMonths, lang } = req.body as {
       campaigns: CampaignData[];
       dateRange?: { start: string; end: string };
       targetCpa?: number;
+      lang?: 'ar' | 'en';
       clientProfile?: {
         name?: string;
         industry?: string;
@@ -894,8 +892,14 @@ app.post(
       historicalMonths?: Pick<MonthlySnapshot, 'monthKey' | 'label' | 'summaryMetrics' | 'learnedTakeaways'>[];
     };
 
+    const isEn = lang === 'en';
+
     if (!campaigns || !Array.isArray(campaigns) || campaigns.length === 0) {
-      res.status(400).json({ error: 'لم يتم إرسال بيانات حملات صالحة للتحليل.' });
+      res.status(400).json({
+        error: isEn
+          ? 'No valid campaign data was provided for analysis.'
+          : 'لم يتم إرسال بيانات حملات صالحة للتحليل.',
+      });
       return;
     }
 
@@ -912,11 +916,17 @@ app.post(
         const prev = historyList[historyList.length - 1];
         const curr = calculateAggregatedMetrics(currentCampaigns);
         const roasDiff = Number((curr.roas - prev.summaryMetrics.roas).toFixed(2));
-        targetResult.historicalComparison = {
-          trendVsPreviousMonths: `مقارنة بشهر ${prev.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات من ${prev.summaryMetrics.totalRevenue} إلى ${curr.totalRevenue}.`,
-          learnedPatterns: historyList.flatMap((h) => h.learnedTakeaways || []).slice(-4),
-          nextMonthTargets: `الحفاظ على ثمن بيعة أقل من ${targetCpa || clientProfile?.targetCpa || curr.cpa} ورفع العائد فوق ${clientProfile?.targetRoas || 2.5}x.`,
-        };
+        targetResult.historicalComparison = isEn
+          ? {
+              trendVsPreviousMonths: `Compared to ${prev.label}, ROAS changed by ${roasDiff >= 0 ? '+' : ''}${roasDiff}x and revenue moved from ${prev.summaryMetrics.totalRevenue} to ${curr.totalRevenue}.`,
+              learnedPatterns: historyList.flatMap((h) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `Maintain CPA below ${targetCpa || clientProfile?.targetCpa || curr.cpa} and scale ROAS above ${clientProfile?.targetRoas || 2.5}x.`,
+            }
+          : {
+              trendVsPreviousMonths: `مقارنة بشهر ${prev.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات من ${prev.summaryMetrics.totalRevenue} إلى ${curr.totalRevenue}.`,
+              learnedPatterns: historyList.flatMap((h) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `الحفاظ على ثمن بيعة أقل من ${targetCpa || clientProfile?.targetCpa || curr.cpa} ورفع العائد فوق ${clientProfile?.targetRoas || 2.5}x.`,
+            };
       }
       return targetResult;
     };
@@ -942,7 +952,7 @@ app.post(
     // If Gemini client is unavailable, use the rich rule-based marketing analyst
     if (!ai || !apiKey) {
       const fallbackAnalysis = attachHistoricalComparisonFallback(
-        generateRuleBasedAnalysis(campaigns),
+        generateRuleBasedAnalysis(campaigns, isEn ? 'en' : 'ar'),
         sortedHistory,
         campaigns
       );
@@ -956,16 +966,27 @@ app.post(
       return;
     }
 
-    const systemInstruction = `أنت مدير تسويق أداء (Senior Performance Marketing Strategist) ومستشار نمو رقمي محترف متخصص في إعلانات سناب شات، تيك توك، ميتا، وجوجل في الأسواق العربية والخليجية.
+    const systemInstruction = isEn
+      ? `You are a Senior Performance Marketing Strategist and Digital Growth Consultant specializing in Snapchat Ads, TikTok Ads, Meta Ads (Facebook & Instagram), and Google Ads.
+Your mission: Analyze the detailed campaign payload — including client profile and month-over-month historical memory (historyMoM), overall metrics, channel breakdown, day-by-day breakdown, and ad-level metrics — to deliver an executive report tailored for both:
+- Performance Marketers: precise daily decisions on which ad to pause, which ad to scale, detecting creative fatigue, and cumulative learning from prior months.
+- Store Owners / Clients: clear executive commentary explaining ROAS, revenue, CPA, and month-over-month progression.
+
+IMPORTANT: Write the ENTIRE report strictly in clear, natural, professional English. Cite exact numbers, ad names, and dates accurately.`
+      : `أنت مدير تسويق أداء (Senior Performance Marketing Strategist) ومستشار نمو رقمي محترف متخصص في إعلانات سناب شات، تيك توك، ميتا، وجوجل في الأسواق العربية والخليجية.
 مهمتك: قراءة البيانات التفصيلية المرفقة — بما فيها بيانات العميل وسجله التاريخي شهر بعد شهر (historyMoM)، والأداء الإجمالي، وتفصيل المنصات، والتفصيل اليومي (يوم بيوم)، وتفصيل الإعلانات (ads) — لتقديم تقرير يفيد كلاً من:
 - مسوّق الأداء (Performance Marketer): قرارات يومية دقيقة حول أي إعلان يُوقف، أي إعلان يُضاعف صرفه (Scale)، كشف الإجهاد الإعلاني (Creative Fatigue)، والتعلم التراكمي من أشهر العميل السابقة.
 - العميل / صاحب المتجر: تعليق تنفيذي واضح ومباشر يشرح العائد على الإنفاق (ROAS)، المبيعات، ثمن البيعة (CPA)، والتطور مقارنة بالأشهر الماضية.
 
 قدم التقرير باللغة العربية الفصحى والمهنية وبشكل موجز ومركّز مع ذكر الأرقام وأسماء الإعلانات والأشهر الفعلية بدقة.`;
 
+    const userPrompt = isEn
+      ? `Analyze the following summarized campaign dataset and generate a comprehensive strategic report in English:\n${promptBudget.serializedJson}`
+      : `حلل بيانات الحملات الموجزة التالية (محددة الحجم لضمان السرعة والكفاءة) واستخرج تقريراً استراتيجياً متكاملاً:\n${promptBudget.serializedJson}`;
+
     const aiPromise = ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: `حلل بيانات الحملات الموجزة التالية (محددة الحجم لضمان السرعة والكفاءة) واستخرج تقريراً استراتيجياً متكاملاً:\n${promptBudget.serializedJson}`,
+      contents: userPrompt,
       config: {
         systemInstruction,
         maxOutputTokens: Math.max(MAX_AI_OUTPUT_TOKENS, 4096),
@@ -976,27 +997,37 @@ app.post(
           properties: {
             executiveSummary: {
               type: Type.STRING,
-              description: 'تعليق تنفيذي شامل وواضح للعميل عن الأداء العام والعائد والمصروف والمبيعات خلال الفترة',
+              description: isEn
+                ? 'Comprehensive executive commentary for the client covering overall performance, ROAS, spend, and revenue'
+                : 'تعليق تنفيذي شامل وواضح للعميل عن الأداء العام والعائد والمصروف والمبيعات خلال الفترة',
             },
             periodAssessment: {
               type: Type.STRING,
-              description: 'تقييم كفاءة الإنفاق والانتشار والاتجاه اليومي خلال الفترة الزمنية المحددة',
+              description: isEn
+                ? 'Assessment of spend efficiency, reach, and daily trend across the selected timeframe'
+                : 'تقييم كفاءة الإنفاق والانتشار والاتجاه اليومي خلال الفترة الزمنية المحددة',
             },
             historicalComparison: {
               type: Type.OBJECT,
               properties: {
                 trendVsPreviousMonths: {
                   type: Type.STRING,
-                  description: 'مقارنة الأداء الحالي بالأشهر السابقة المخزنة للعميل',
+                  description: isEn
+                    ? 'Comparison of current performance against prior stored months'
+                    : 'مقارنة الأداء الحالي بالأشهر السابقة المخزنة للعميل',
                 },
                 learnedPatterns: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: 'الدروس والأنماط المستخلصة من تاريخ العميل الإعلاني',
+                  description: isEn
+                    ? 'Patterns and takeaways learned from the client historical data'
+                    : 'الدروس والأنماط المستخلصة من تاريخ العميل الإعلاني',
                 },
                 nextMonthTargets: {
                   type: Type.STRING,
-                  description: 'أهداف واضحة ومقترحة للشهر القادم بناءً على المنحنى التاريخي',
+                  description: isEn
+                    ? 'Clear recommended KPI targets for next month'
+                    : 'أهداف واضحة ومقترحة للشهر القادم بناءً على المنحنى التاريخي',
                 },
               },
               required: ['trendVsPreviousMonths', 'learnedPatterns', 'nextMonthTargets'],
@@ -1008,15 +1039,17 @@ app.post(
                 properties: {
                   platform: {
                     type: Type.STRING,
-                    description: 'snapchat أو tiktok أو meta أو google أو other',
+                    description: 'snapchat or tiktok or meta or google or other',
                   },
                   status: {
                     type: Type.STRING,
-                    description: 'winner أو promising أو needs_optimization أو underperforming',
+                    description: 'winner or promising or needs_optimization or underperforming',
                   },
                   comment: {
                     type: Type.STRING,
-                    description: 'تحليل دقيق لأداء المنصة ومبررات التصنيف',
+                    description: isEn
+                      ? 'Detailed analysis of platform performance and classification rationale'
+                      : 'تحليل دقيق لأداء المنصة ومبررات التصنيف',
                   },
                   roas: { type: Type.NUMBER },
                   cpa: { type: Type.NUMBER },
@@ -1027,14 +1060,13 @@ app.post(
             dailyInsights: {
               type: Type.OBJECT,
               properties: {
-                trendSummary: { type: Type.STRING, description: 'قراءة مسار الأداء يوم بيوم خلال الفترة' },
-                bestPerformingDays: { type: Type.STRING, description: 'أفضل الأيام مبيعاً وعائداً ولماذا' },
+                trendSummary: { type: Type.STRING },
+                bestPerformingDays: { type: Type.STRING },
                 fatigueWarnings: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: 'تنبيهات الإجهاد الإعلاني أو ارتفاع CPA في أيام/إعلانات محددة',
                 },
-                dailyPacingAdvice: { type: Type.STRING, description: 'توصية عملية لوتيرة الصرف اليومي (Daily Pacing)' },
+                dailyPacingAdvice: { type: Type.STRING },
               },
               required: ['trendSummary', 'bestPerformingDays', 'fatigueWarnings', 'dailyPacingAdvice'],
             },
@@ -1047,7 +1079,7 @@ app.post(
                   platform: { type: Type.STRING },
                   action: {
                     type: Type.STRING,
-                    description: 'scale أو optimize أو pause أو refresh_creative',
+                    description: 'scale or optimize or pause or refresh_creative',
                   },
                   reason: { type: Type.STRING },
                 },
@@ -1061,7 +1093,7 @@ app.post(
                 comment: { type: Type.STRING },
                 highestCpaCampaign: { type: Type.STRING },
                 lowestCpaCampaign: { type: Type.STRING },
-                wasteEstimate: { type: Type.NUMBER, description: 'تقدير المبالغ المهدورة على حملات/إعلانات منخفضة العائد' },
+                wasteEstimate: { type: Type.NUMBER },
               },
               required: ['status', 'comment', 'highestCpaCampaign', 'lowestCpaCampaign', 'wasteEstimate'],
             },
@@ -1082,12 +1114,10 @@ app.post(
             actionableRecommendations: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: '4 إلى 6 خطوات عملية محددة وقابلة للتنفيذ الفوري لمسوّق الأداء',
             },
             scalingOpportunities: {
               type: Type.ARRAY,
               items: { type: Type.STRING },
-              description: 'فرص مضاعفة المبيعات والتوسع',
             },
           },
           required: [
@@ -1113,12 +1143,13 @@ app.post(
 
     const resultText = response.text;
     if (!resultText) {
-      throw new Error('لم يتم استلام نص من نموذج الذكاء الاصطناعي.');
+      throw new Error(isEn ? 'No text received from AI model.' : 'لم يتم استلام نص من نموذج الذكاء الاصطناعي.');
     }
 
     const parsedJson = safeParseAiJson(resultText);
-    parsedJson.generatedAt = new Date().toLocaleString('ar-SA');
+    parsedJson.generatedAt = new Date().toLocaleString(isEn ? 'en-US' : 'ar-SA');
     parsedJson.aiModelLabel = 'Gemini 2.5 Flash';
+    parsedJson.language = isEn ? 'en' : 'ar';
     parsedJson.tokenBudget = {
       promptChars: promptBudget.promptChars,
       estimatedInputTokens: promptBudget.estimatedInputTokens,
@@ -1129,21 +1160,28 @@ app.post(
     res.json(parsedJson);
   } catch (error: any) {
     console.error('Error generating AI campaign analysis:', error);
-    const { campaigns, historicalMonths, targetCpa, clientProfile } = req.body || {};
+    const { campaigns, historicalMonths, targetCpa, clientProfile, lang } = req.body || {};
+    const isEn = lang === 'en';
     if (campaigns && Array.isArray(campaigns)) {
       const sortedHistory = Array.isArray(historicalMonths)
         ? [...historicalMonths].sort((a: any, b: any) => String(a.monthKey).localeCompare(String(b.monthKey)))
         : [];
-      const fallback: any = generateRuleBasedAnalysis(campaigns);
+      const fallback: any = generateRuleBasedAnalysis(campaigns, isEn ? 'en' : 'ar');
       if (sortedHistory.length > 0) {
         const prev = sortedHistory[sortedHistory.length - 1];
         const curr = calculateAggregatedMetrics(campaigns);
         const roasDiff = Number((curr.roas - (prev.summaryMetrics?.roas || 0)).toFixed(2));
-        fallback.historicalComparison = {
-          trendVsPreviousMonths: `مقارنة بشهر ${prev.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات من ${prev.summaryMetrics?.totalRevenue || 0} إلى ${curr.totalRevenue}.`,
-          learnedPatterns: sortedHistory.flatMap((h: any) => h.learnedTakeaways || []).slice(-4),
-          nextMonthTargets: `الحفاظ على ثمن بيعة أقل من ${targetCpa || clientProfile?.targetCpa || curr.cpa} ورفع العائد فوق ${clientProfile?.targetRoas || 2.5}x.`,
-        };
+        fallback.historicalComparison = isEn
+          ? {
+              trendVsPreviousMonths: `Compared to ${prev.label}, ROAS changed by ${roasDiff >= 0 ? '+' : ''}${roasDiff}x and revenue moved from ${prev.summaryMetrics?.totalRevenue || 0} to ${curr.totalRevenue}.`,
+              learnedPatterns: sortedHistory.flatMap((h: any) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `Maintain CPA below ${targetCpa || clientProfile?.targetCpa || curr.cpa} and scale ROAS above ${clientProfile?.targetRoas || 2.5}x.`,
+            }
+          : {
+              trendVsPreviousMonths: `مقارنة بشهر ${prev.label}، تغيّر العائد (ROAS) بمقدار ${roasDiff >= 0 ? '+' : ''}${roasDiff}x والمبيعات من ${prev.summaryMetrics?.totalRevenue || 0} إلى ${curr.totalRevenue}.`,
+              learnedPatterns: sortedHistory.flatMap((h: any) => h.learnedTakeaways || []).slice(-4),
+              nextMonthTargets: `الحفاظ على ثمن بيعة أقل من ${targetCpa || clientProfile?.targetCpa || curr.cpa} ورفع العائد فوق ${clientProfile?.targetRoas || 2.5}x.`,
+            };
       }
       const overall = calculateAggregatedMetrics(campaigns);
       const platforms = calculatePlatformBreakdown(campaigns);
@@ -1169,7 +1207,11 @@ app.post(
       res.json(fallback);
       return;
     }
-    res.status(500).json({ error: 'حدث خطأ أثناء تحليل الحملات، يرجى المحاولة لاحقاً.' });
+    res.status(500).json({
+      error: isEn
+        ? 'An error occurred while analyzing campaigns. Please try again later.'
+        : 'حدث خطأ أثناء تحليل الحملات، يرجى المحاولة لاحقاً.',
+    });
   }
 });
 
