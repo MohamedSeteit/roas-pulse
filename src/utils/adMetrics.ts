@@ -1409,23 +1409,83 @@ export function generateSampleDailyMultiPlatformCSV(): string {
 }
 
 /**
- * Generates ready-to-download CSV sample text in Arabic with "التاريخ من" and "التاريخ إلى" and "الإضافة للسلة".
+ * Generates ready-to-download unified CSV template in Arabic or English.
  */
-export function generateSampleCSVString(): string {
-  const header = 'المنصة,اسم الحملة,التاريخ من,التاريخ إلى,المصروف (ر.س),المبيعات (ر.س),عدد الطلبات,مرات الظهور,النقرات,الإضافة للسلة\n';
+export function generateSampleCSVString(lang: 'ar' | 'en' = 'ar'): string {
+  if (lang === 'en') {
+    const header =
+      'Platform,Campaign Name,Ad Set Name,Ad Name,Day,Amount Spent,Purchases Conversion Value,Purchases,Impressions,Clicks,Page Views,Adds to Cart,Checkouts Initiated\n';
+    const rows = [
+      'Snapchat,Campaign - Sales - Q4,Saudi Arabia All Genders 23+,Pur 11 / 3-10-26,2026-11-01,87.89,977,4,2527,22,52,8,6',
+      'Snapchat,Campaign - Sales - Q4,Saudi Arabia All Genders 23+,Pur 12 / GlowCream,2026-11-02,145.50,1890,9,4120,48,95,14,10',
+      'TikTok,Campaign - Sales 18 Oct,Lookalike_Purchasers_KSA,SparkAd_Creator_01,2026-11-01,469.25,7995,7,29642,243,244,18,11',
+      'Meta,Campaign - Sales - Nov26,NC-ROAS-Riyadh-Nov26,Pur 03 / 17-11-26,2026-11-01,161.37,1420,6,3701,39,65,12,7',
+      'Google,Campaign-Sales-Shopping-1,Ad Group 1 - Shopping,Product_Ad_8081,2026-11-01,147.71,5377.41,12,4347,106,120,21,15',
+    ];
+    return header + rows.join('\n');
+  }
+
+  const header =
+    'المنصة,اسم الحملة,اسم المجموعة الإعلانية,اسم الإعلان,التاريخ,المصروف (ر.س),المبيعات (ر.س),عدد الطلبات,مرات الظهور,النقرات,زيارات الصفحة,الإضافة للسلة,بدء الدفع\n';
   const rows = [
-    'سناب شات,Ad #1 - OffersPage,2026-10-22,2026-11-12,5.23,0,0,432,5,8',
-    ',Ad #2 - GlowSkinCream,2026-10-22,2026-11-12,197.35,20771,7,"22,227",14,512',
-    ',Ad #3 - CreamTa\'sher,2026-10-22,2026-11-12,42.89,2502,58,"13,062",256,163',
-    ',Ad #4 - CreamTafteeh,2026-10-22,2026-11-12,291.75,38972.1,99,"129,630",227,818',
-    'تيك توك,AddToCart Campaign,2026-10-22,2026-10-27,97.34,0,0,"15,392","3,712",437',
-    ',Purchase Campaign,2026-10-27,2026-11-12,818.27,"28,475.95",70,"89,954","4,785",652',
-    'ميتا,Meta_IG_Reels_عناية_بالبشرة,2026-10-25,2026-11-12,420.50,14850,38,"45,200",890,210',
-    'جوجل,Google_Search_كريم_تفتيح,2026-10-22,2026-11-12,310.00,8920,24,"18,400",640,145',
+    'سناب شات,حملة مبيعات الربع الرابع,السعودية 23+ عام,إعلان فيديو 1 - عرض التوفير,2026-11-01,87.89,977,4,2527,22,52,8,6',
+    'سناب شات,حملة مبيعات الربع الرابع,السعودية 23+ عام,إعلان فيديو 2 - كريم النضارة,2026-11-02,145.50,1890,9,4120,48,95,14,10',
+    'تيك توك,حملة تيك توك مبيعات,جمهور مشابه للمشترين,إعلان صانع محتوى 01,2026-11-01,469.25,7995,7,29642,243,244,18,11',
+    'ميتا,حملة ميتا مبيعات الرياض,استهداف الرياض المفتوح,تصميم كاروسيل الباقة,2026-11-01,161.37,1420,6,3701,39,65,12,7',
+    'جوجل,حملة جوجل شوبينج,المجموعة الإعلانية 1,إعلان منتج مميز 01,2026-11-01,147.71,5377.41,12,4347,106,120,21,15',
   ];
   return header + rows.join('\n');
 }
 
+/**
+ * Generates platform-specific ready CSV templates matching real exported reports
+ * in either English (native headers) or Arabic.
+ */
+export function generatePlatformExactTemplateCSV(
+  platform: AdPlatform,
+  lang: 'ar' | 'en' = 'en'
+): string {
+  if (lang === 'ar') {
+    const platformAr = PLATFORM_NAMES_AR[platform] || platform;
+    const header =
+      'المنصة,اسم الحملة,اسم المجموعة الإعلانية,اسم الإعلان,التاريخ,المصروف (ر.س),المبيعات (ر.س),عدد الطلبات,مرات الظهور,النقرات,زيارات الصفحة,الإضافة للسلة,بدء الدفع\n';
+    const rows = [
+      `${platformAr},حملة المبيعات الرئيسية,المجموعة الإعلانية 1 - السعودية,إعلان فيديو 01,2026-11-01,150.00,1850.00,8,5400,95,110,16,11`,
+      `${platformAr},حملة المبيعات الرئيسية,المجموعة الإعلانية 1 - السعودية,إعلان فيديو 02,2026-11-02,180.00,2420.00,11,6200,118,135,21,14`,
+    ];
+    return header + rows.join('\n');
+  }
+
+  switch (platform) {
+    case 'snapchat':
+      return (
+        'Start Time,Campaign Name,Campaign Id,Ad Set Name,Ad Set Id,Ad Name,Ad Id,Amount Spent,Total Impressions,Clicks,Pages Viewed,Adds To Cart,Purchases,Purchases Value,Checkouts Started\n' +
+        '2026-11-01 00:00:00 AST,Campaign - Sales - Q4,a86b6145-69a6,"Saudi Arabia, All Genders, 23+",688a26eb-3108,Pur 11 / Video_01,26eba75c-961d,87.89,2527,22,52,8,4,977,6\n' +
+        '2026-11-02 00:00:00 AST,Campaign - Sales - Q4,a86b6145-69a6,"Saudi Arabia, All Genders, 23+",688a26eb-3108,Pur 12 / Video_02,26eba75c-961e,145.50,4120,48,95,14,9,1890,10'
+      );
+    case 'tiktok':
+      return (
+        'Campaign name,Campaign ID,Ad group name,Ad group ID,Ad name,Ad ID,By Day,Spend,Impressions,Conversions,Purchases (website),Purchase value (website),Page views (website),Adds to cart (website),Currency\n' +
+        'Campaign - Sales Oct,1879399881410801,Ad group Lookalike_KSA,1879399992181233,SparkAd_Creator_01,1879400088588481,2026-11-01,469.25,29642,7,7,7995,244,18,SAR\n' +
+        'Campaign - Sales Oct,1879399881410801,Ad group Lookalike_KSA,1879399992181233,SparkAd_Creator_02,1879400088588482,2026-11-02,375.00,18414,11,11,6499,178,24,SAR'
+      );
+    case 'meta':
+      return (
+        'Campaign name,Campaign ID,Ad set name,Ad set ID,Ad name,Ad ID,Reach,Impressions,Amount spent (SAR),Adds to cart,Purchases,Landing page views,Checkouts initiated,Purchases conversion value,Reporting starts,Reporting ends\n' +
+        'Campaign - Sales - Nov26,120254946429760471,NC-ROAS-Riyadh-Nov26,120254946429780471,Pur 03 / Carousel_01,120255011399050471,1901,3701,161.37,12,6,65,7,1420,2026-11-01,2026-11-01\n' +
+        'Campaign - Sales - Nov26,120254946429760471,NC-ROAS-Riyadh-Nov26,120254946429780471,Pur 04 / Reels_02,120255011399050472,2450,4890,210.00,19,9,92,11,2350,2026-11-02,2026-11-02'
+      );
+    case 'google':
+    default:
+      return (
+        'Detailed ad performance breakdown by day,,,,,,,,,\n' +
+        '"Nov 1, 2026 - Nov 2, 2026",,,,,,,,,\n' +
+        'Campaign,Campaign ID,Ad group,Ad group ID,Ad ID,Day,Currency code,Cost,Conversions,Interactions,Conv. value,Impr.\n' +
+        'Campaign-Sales-Shopping-1,23826960854,Ad Group 1,199372443114,808124548487,2026-11-01,SAR,147.71,12,106,5377.41,4347\n' +
+        'Campaign-Sales-Shopping-1,23826960854,Ad Group 1,199372443114,808124548487,2026-11-02,SAR,120.56,15,90,5544.70,3137'
+      );
+  }
+}
 /**
  * Rule-based fallback marketing analyst that produces structured AI-like report
  * including Day-by-Day & Ad-level insights if Gemini API key is missing or offline.
