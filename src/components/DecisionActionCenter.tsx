@@ -22,7 +22,8 @@ import type {
   AggregatedMetrics,
   AdPlatform,
 } from '../types/campaign';
-import { PLATFORM_NAMES_AR } from '../utils/adMetrics';
+import { PLATFORM_NAMES_AR, PLATFORM_NAMES_EN } from '../utils/adMetrics';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DecisionActionCenterProps {
   adBreakdown: AdBreakdownItem[];
@@ -33,12 +34,20 @@ interface DecisionActionCenterProps {
   targetRoas?: number;
 }
 
-const SHORT_PLATFORM_LABEL: Record<AdPlatform, string> = {
+const SHORT_PLATFORM_LABEL_AR: Record<AdPlatform, string> = {
   snapchat: 'سناب شات',
   tiktok: 'تيك توك',
   meta: 'ميتا',
   google: 'جوجل',
   other: 'أخرى',
+};
+
+const SHORT_PLATFORM_LABEL_EN: Record<AdPlatform, string> = {
+  snapchat: 'Snapchat',
+  tiktok: 'TikTok',
+  meta: 'Meta',
+  google: 'Google',
+  other: 'Other',
 };
 
 const PLATFORM_BADGE_CLASSES: Record<AdPlatform, string> = {
@@ -57,7 +66,11 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
   targetCpa = 60,
   targetRoas = 3.0,
 }) => {
+  const { isEn } = useLanguage();
   const [activeTab, setActiveTab] = useState<'actions' | 'simulator' | 'funnel'>('actions');
+
+  const shortLabel = isEn ? SHORT_PLATFORM_LABEL_EN : SHORT_PLATFORM_LABEL_AR;
+  const fullPlatformName = isEn ? PLATFORM_NAMES_EN : PLATFORM_NAMES_AR;
 
   // 1. Categorize Ads into Stop / Refresh Creative / Scale Up
   const actionBuckets = useMemo(() => {
@@ -97,7 +110,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
     };
   }, [adBreakdown, targetCpa, targetRoas]);
 
-  // 2. What-If Budget Reallocation Simulator State & Calculations
+  // 2. What-If Budget Reallocation Simulator
   const sortedPlatformsByRoas = useMemo(
     () => [...platforms].filter((p) => p.totalSpend > 0).sort((a, b) => b.roas - a.roas),
     [platforms]
@@ -143,7 +156,6 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
     const tgtMetrics = platforms.find((p) => p.platform === targetPlatform);
 
     const srcRoas = srcMetrics?.roas ?? 1.2;
-    // Apply a realistic 15% diminishing-returns buffer when scaling winner platform
     const rawTgtRoas = tgtMetrics?.roas ?? Math.max(4.0, overallMetrics.roas * 1.25);
     const conservativeTgtRoas = Number((rawTgtRoas * 0.85).toFixed(2));
 
@@ -174,7 +186,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
   // 3. Funnel Leak Finder Diagnostics per Platform
   const funnelDiagnostics = useMemo(() => {
     return platforms.map((p) => {
-      const ctr = p.ctr; // Clicks / Impressions * 100
+      const ctr = p.ctr;
       const clickToCartRate =
         p.clicks > 0 && p.totalAddToCart > 0
           ? Number(((p.totalAddToCart / p.clicks) * 100).toFixed(1))
@@ -187,22 +199,37 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
         p.clicks > 0 ? Number(((p.totalPurchases / p.clicks) * 100).toFixed(2)) : 0;
 
       let leakStage: 'creative' | 'landing' | 'checkout' | 'healthy' = 'healthy';
-      let diagnosisTitle = 'مسار تحويل متوازن وصحي';
-      let diagnosisAdvice =
-        'النسب من الظهور حتى إتمام الطلب متناسقة. حافظ على استقرار العرض وجرّب زيادة الميزانية تدريجياً.';
+      let diagnosisTitle = isEn
+        ? 'Healthy & Balanced Funnel'
+        : 'مسار تحويل متوازن وصحي';
+      let diagnosisAdvice = isEn
+        ? 'Conversion rates from impression to purchase are consistent. Maintain offer stability and scale gradually.'
+        : 'النسب من الظهور حتى إتمام الطلب متناسقة. حافظ على استقرار العرض وجرّب زيادة الميزانية تدريجياً.';
 
       if (ctr < 0.85 && p.totalImpressions > 1000) {
         leakStage = 'creative';
-        diagnosisTitle = 'تسريب في مرحلة الجذب (CTR منخفض)';
-        diagnosisAdvice = `نسبة النقر (${ctr}%) ضعيفة مقارنة بالظهور — المشكلة في أول 3 ثوانٍ من الفيديو أو الهوك (Hook). غيّر التصميم الإعلاني قبل زيادة الصرف.`;
+        diagnosisTitle = isEn
+          ? 'Top-of-Funnel Leak (Low CTR)'
+          : 'تسريب في مرحلة الجذب (CTR منخفض)';
+        diagnosisAdvice = isEn
+          ? `CTR (${ctr}%) is weak relative to impressions — the issue is in the first 3 seconds hook. Refresh ad creatives before scaling spend.`
+          : `نسبة النقر (${ctr}%) ضعيفة مقارنة بالظهور — المشكلة في أول 3 ثوانٍ من الفيديو أو الهوك (Hook). غيّر التصميم الإعلاني قبل زيادة الصرف.`;
       } else if (p.totalAddToCart > 15 && cartToPurchaseRate < 15) {
         leakStage = 'checkout';
-        diagnosisTitle = 'تسريب في السلة وإتمام الدفع (Abandoned Carts)';
-        diagnosisAdvice = `${p.totalAddToCart.toLocaleString()} عميل أضافوا للسلة لكن ${cartToPurchaseRate}% فقط أكملوا الشراء — راجع تكلفة الشحن، وسائل الدفع (تابي/تمارا/مدى)، وأطلق حملة Retargeting فوراً.`;
+        diagnosisTitle = isEn
+          ? 'Checkout / Abandoned Cart Leak'
+          : 'تسريب في السلة وإتمام الدفع (Abandoned Carts)';
+        diagnosisAdvice = isEn
+          ? `${p.totalAddToCart.toLocaleString()} added to cart, but only ${cartToPurchaseRate}% completed checkout — audit shipping fees, payment options, and launch a Retargeting campaign.`
+          : `${p.totalAddToCart.toLocaleString()} عميل أضافوا للسلة لكن ${cartToPurchaseRate}% فقط أكملوا الشراء — راجع تكلفة الشحن، وسائل الدفع (تابي/تمارا/مدى)، وأطلق حملة Retargeting فوراً.`;
       } else if (p.clicks > 100 && p.totalAddToCart === 0 && clickToPurchaseRate < 0.8) {
         leakStage = 'landing';
-        diagnosisTitle = 'تسريب في صفحة الهبوط (Landing Page)';
-        diagnosisAdvice = `الزوار يضغطون على الإعلان (${p.clicks.toLocaleString()} نقرة) لكن لا يضيفون للسلة — تأكد من سرعة الموقع، وضوح السعر والعرض، وتطابق وعد الإعلان مع الصفحة.`;
+        diagnosisTitle = isEn
+          ? 'Landing Page Conversion Leak'
+          : 'تسريب في صفحة الهبوط (Landing Page)';
+        diagnosisAdvice = isEn
+          ? `Users click the ad (${p.clicks.toLocaleString()} clicks) without adding to cart — verify page speed, price clarity, and ad-to-page message match.`
+          : `الزوار يضغطون على الإعلان (${p.clicks.toLocaleString()} نقرة) لكن لا يضيفون للسلة — تأكد من سرعة الموقع، وضوح السعر والعرض، وتطابق وعد الإعلان مع الصفحة.`;
       }
 
       return {
@@ -215,13 +242,13 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
         diagnosisAdvice,
       };
     });
-  }, [platforms]);
+  }, [platforms, isEn]);
 
   if (adBreakdown.length === 0) return null;
 
   return (
     <section
-      aria-label="مركز القرارات الذكي ومحاكي الميزانية"
+      aria-label={isEn ? 'AI Decision & Growth Center' : 'مركز القرارات الذكي ومحاكي الميزانية'}
       className="rounded-2xl border border-indigo-200 dark:border-indigo-500/30 bg-white dark:bg-slate-900/70 p-5 space-y-5 shadow-sm"
     >
       {/* Header & 3-Tool Navigation */}
@@ -232,14 +259,18 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
               <Zap className="w-4 h-4" />
             </div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              مركز القرارات الذكي ومساعد النمو (AI Decision & Growth Center)
+              {isEn
+                ? 'AI Decision & Growth Center'
+                : 'مركز القرارات الذكي ومساعد النمو (AI Decision & Growth Center)'}
             </h3>
             <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
-              توصيات مبنية على أرقامك الفعلية
+              {isEn ? 'Live Data-Driven Actions' : 'توصيات مبنية على أرقامك الفعلية'}
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
-            حوّل الأرقام إلى خطوات تنفيذية: أوقف الإعلانات النازفة، حاكِ نقل الميزانية لزيادة الأرباح، واكتشف أين يضيع العملاء في مسار الشراء
+            {isEn
+              ? 'Turn raw metrics into instant decisions: pause bleeding ads, simulate budget shifts, and pinpoint funnel leaks'
+              : 'حوّل الأرقام إلى خطوات تنفيذية: أوقف الإعلانات النازفة، حاكِ نقل الميزانية لزيادة الأرباح، واكتشف أين يضيع العملاء في مسار الشراء'}
           </p>
         </div>
 
@@ -255,7 +286,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             }`}
           >
             <OctagonAlert className="w-3.5 h-3.5" />
-            <span>كاشف النزيف والقرارات</span>
+            <span>{isEn ? 'Bleeding & Fatigue' : 'كاشف النزيف والقرارات'}</span>
             {actionBuckets.stopAds.length > 0 && (
               <span
                 className={`px-1.5 py-0.2 rounded-full text-[10px] ${
@@ -279,7 +310,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            <span>محاكي الميزانية (What-If)</span>
+            <span>{isEn ? 'What-If Simulator' : 'محاكي الميزانية (What-If)'}</span>
           </button>
 
           <button
@@ -292,7 +323,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             }`}
           >
             <Filter className="w-3.5 h-3.5" />
-            <span>تشخيص مسار التحويل</span>
+            <span>{isEn ? 'Funnel Leak Finder' : 'تشخيص مسار التحويل'}</span>
           </button>
         </div>
       </div>
@@ -302,19 +333,20 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
       ===================================================================== */}
       {activeTab === 'actions' && (
         <div className="space-y-4">
-          {/* Quick Impact Summary Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="rounded-xl border border-rose-200 dark:border-rose-500/30 bg-rose-50/70 dark:bg-rose-950/20 p-3.5 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-rose-700 dark:text-rose-300 block">
-                  إعلانات تستنزف الميزانية (أوقفها فوراً)
+                  {isEn ? 'Bleeding Ads (Pause Now)' : 'إعلانات تستنزف الميزانية (أوقفها فوراً)'}
                 </span>
                 <p className="text-lg font-black text-rose-800 dark:text-rose-200 mt-0.5 tabular-nums">
-                  {actionBuckets.stopAds.length} إعلان
+                  {actionBuckets.stopAds.length} {isEn ? 'Ads' : 'إعلان'}
                 </p>
               </div>
-              <div className="text-left">
-                <span className="text-[10px] text-slate-600 dark:text-slate-400 block">وفر مباشر متوقع:</span>
+              <div className={isEn ? 'text-right' : 'text-left'}>
+                <span className="text-[10px] text-slate-600 dark:text-slate-400 block">
+                  {isEn ? 'Direct Savings:' : 'وفر مباشر متوقع:'}
+                </span>
                 <span className="text-sm font-black text-rose-700 dark:text-rose-300 tabular-nums">
                   {actionBuckets.totalWastedSpend.toLocaleString()} {currency}
                 </span>
@@ -324,10 +356,10 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             <div className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-950/20 p-3.5 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 block">
-                  إعلانات بها إجهاد (جدّد الفيديو/التصميم)
+                  {isEn ? 'Fatigued Ads (Refresh Creative)' : 'إعلانات بها إجهاد (جدّد الفيديو/التصميم)'}
                 </span>
                 <p className="text-lg font-black text-amber-800 dark:text-amber-200 mt-0.5 tabular-nums">
-                  {actionBuckets.refreshAds.length} إعلان
+                  {actionBuckets.refreshAds.length} {isEn ? 'Ads' : 'إعلان'}
                 </p>
               </div>
               <RefreshCw className="w-6 h-6 text-amber-600 dark:text-amber-400 opacity-80" />
@@ -336,14 +368,16 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             <div className="rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-950/20 p-3.5 flex items-center justify-between">
               <div>
                 <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 block">
-                  إعلانات نجوم جاهزة للتوسع (Scale Up)
+                  {isEn ? 'Winning Ads (Ready to Scale)' : 'إعلانات نجوم جاهزة للتوسع (Scale Up)'}
                 </span>
                 <p className="text-lg font-black text-emerald-800 dark:text-emerald-200 mt-0.5 tabular-nums">
-                  {actionBuckets.scaleAds.length} إعلان
+                  {actionBuckets.scaleAds.length} {isEn ? 'Ads' : 'إعلان'}
                 </p>
               </div>
-              <div className="text-left">
-                <span className="text-[10px] text-slate-600 dark:text-slate-400 block">مبيعاتها المحققة:</span>
+              <div className={isEn ? 'text-right' : 'text-left'}>
+                <span className="text-[10px] text-slate-600 dark:text-slate-400 block">
+                  {isEn ? 'Generated Sales:' : 'مبيعاتها المحققة:'}
+                </span>
                 <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 tabular-nums">
                   {actionBuckets.totalScaleRevenue.toLocaleString()} {currency}
                 </span>
@@ -351,24 +385,24 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
             </div>
           </div>
 
-          {/* 3 Columns of Actionable Cards */}
+          {/* 3 Columns */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Column 1: STOP */}
             <div className="rounded-xl border border-rose-200 dark:border-rose-500/25 bg-slate-50/70 dark:bg-slate-950/50 p-3.5 space-y-2.5">
               <div className="flex items-center justify-between border-b border-rose-200/70 dark:border-rose-500/20 pb-2">
                 <span className="text-xs font-black text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
                   <OctagonAlert className="w-4 h-4" />
-                  1. أوقف فوراً (Stop Bleeding)
+                  {isEn ? '1. Stop Bleeding Immediately' : '1. أوقف فوراً (Stop Bleeding)'}
                 </span>
                 <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                  عائد &lt; 1.5x
+                  ROAS &lt; 1.5x
                 </span>
               </div>
 
               {actionBuckets.stopAds.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500 space-y-1">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" />
-                  <p>ممتاز! لا توجد إعلانات نازفة حالياً.</p>
+                  <p>{isEn ? 'Great! No bleeding ads detected.' : 'ممتاز! لا توجد إعلانات نازفة حالياً.'}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
@@ -386,20 +420,24 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                             PLATFORM_BADGE_CLASSES[ad.platform]
                           }`}
                         >
-                          {SHORT_PLATFORM_LABEL[ad.platform]}
+                          {shortLabel[ad.platform]}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px] tabular-nums">
                         <span className="text-rose-700 dark:text-rose-300 font-bold">
-                          صرف: {ad.spend.toLocaleString()} {currency}
+                          {isEn ? 'Spend' : 'صرف'}: {ad.spend.toLocaleString()} {currency}
                         </span>
                         <span className="text-slate-600 dark:text-slate-400">
-                          مبيعات: {ad.revenue.toLocaleString()} ({ad.roas}x)
+                          {isEn ? 'Sales' : 'مبيعات'}: {ad.revenue.toLocaleString()} ({ad.roas}x)
                         </span>
                       </div>
                       <p className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">
                         {ad.purchases === 0
-                          ? `استهلك ${ad.spend.toLocaleString()} ${currency} بدون أي عملية شراء.`
+                          ? isEn
+                            ? `Spent ${ad.spend.toLocaleString()} ${currency} with 0 purchases.`
+                            : `استهلك ${ad.spend.toLocaleString()} ${currency} بدون أي عملية شراء.`
+                          : isEn
+                          ? `CPA (${ad.cpa} ${currency}) is way above target (${targetCpa} ${currency}).`
                           : `تكلفة البيعة (${ad.cpa} ${currency}) مرتفعة جداً مقارنة بالهدف (${targetCpa} ${currency}).`}
                       </p>
                     </div>
@@ -413,17 +451,17 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
               <div className="flex items-center justify-between border-b border-amber-200/70 dark:border-amber-500/20 pb-2">
                 <span className="text-xs font-black text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                   <RefreshCw className="w-4 h-4" />
-                  2. جدّد التصميم (Ad Fatigue)
+                  {isEn ? '2. Refresh Creative (Fatigue)' : '2. جدّد التصميم (Ad Fatigue)'}
                 </span>
                 <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                  تراجع التفاعل
+                  {isEn ? 'CTR Drop' : 'تراجع التفاعل'}
                 </span>
               </div>
 
               {actionBuckets.refreshAds.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500 space-y-1">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 mx-auto" />
-                  <p>التصاميم الإعلانية مستقرة ولا تظهر إجهاداً حاداً.</p>
+                  <p>{isEn ? 'Creatives are stable with no severe fatigue.' : 'التصاميم الإعلانية مستقرة ولا تظهر إجهاداً حاداً.'}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
@@ -441,19 +479,21 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                             PLATFORM_BADGE_CLASSES[ad.platform]
                           }`}
                         >
-                          {SHORT_PLATFORM_LABEL[ad.platform]}
+                          {shortLabel[ad.platform]}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px] tabular-nums">
                         <span className="text-slate-700 dark:text-slate-300 font-semibold">
-                          عائد: {ad.roas}x • CTR: {ad.ctr}%
+                          ROAS: {ad.roas}x • CTR: {ad.ctr}%
                         </span>
                         <span className="text-amber-700 dark:text-amber-300 font-bold">
                           CPA: {ad.cpa} {currency}
                         </span>
                       </div>
                       <p className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                        الجمهور تشبّع من الإعلان خلال {ad.daysActive} يوم — أضف 2-3 هوكات جديدة.
+                        {isEn
+                          ? `Audience saturation after ${ad.daysActive} days — test 2-3 new video hooks.`
+                          : `الجمهور تشبّع من الإعلان خلال ${ad.daysActive} يوم — أضف 2-3 هوكات جديدة.`}
                       </p>
                     </div>
                   ))}
@@ -466,17 +506,17 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
               <div className="flex items-center justify-between border-b border-emerald-200/70 dark:border-emerald-500/20 pb-2">
                 <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
                   <Rocket className="w-4 h-4" />
-                  3. ضاعف الميزانية (Scale Up)
+                  {isEn ? '3. Scale Winning Ads' : '3. ضاعف الميزانية (Scale Up)'}
                 </span>
                 <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
-                  إعلانات رابحة
+                  {isEn ? 'High ROAS' : 'إعلانات رابحة'}
                 </span>
               </div>
 
               {actionBuckets.scaleAds.length === 0 ? (
                 <div className="py-6 text-center text-xs text-slate-500 space-y-1">
                   <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto" />
-                  <p>لا يوجد إعلان تخطى سقف التوسع الآمن بعد.</p>
+                  <p>{isEn ? 'No ads crossed the safe scaling threshold yet.' : 'لا يوجد إعلان تخطى سقف التوسع الآمن بعد.'}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
@@ -494,19 +534,21 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                             PLATFORM_BADGE_CLASSES[ad.platform]
                           }`}
                         >
-                          {SHORT_PLATFORM_LABEL[ad.platform]}
+                          {shortLabel[ad.platform]}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px] tabular-nums">
                         <span className="text-emerald-700 dark:text-emerald-400 font-black">
-                          ROAS: {ad.roas}x ({ad.purchases} طلب)
+                          ROAS: {ad.roas}x ({ad.purchases} {isEn ? 'orders' : 'طلب'})
                         </span>
                         <span className="text-slate-600 dark:text-slate-400">
                           CPA: {ad.cpa} {currency}
                         </span>
                       </div>
                       <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">
-                        ارفع ميزانية المجموعة بنسبة +20% كل 48 ساعة للحفاظ على ثبات العائد.
+                        {isEn
+                          ? 'Increase ad set budget by +20% every 48h to keep algorithm stable.'
+                          : 'ارفع ميزانية المجموعة بنسبة +20% كل 48 ساعة للحفاظ على ثبات العائد.'}
                       </p>
                     </div>
                   ))}
@@ -522,22 +564,21 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
       ===================================================================== */}
       {activeTab === 'simulator' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-          {/* Controls Side */}
           <div className="lg:col-span-7 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 p-4 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                 <ArrowLeftRight className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                اختر مسار نقل الميزانية بين المنصات
+                {isEn ? 'Simulate Budget Shift Between Channels' : 'اختر مسار نقل الميزانية بين المنصات'}
               </span>
               <span className="text-[11px] text-slate-500">
-                معامل تحفظ تلقائي (-15% عند التوسع)
+                {isEn ? 'Auto -15% scaling buffer' : 'معامل تحفظ تلقائي (-15% عند التوسع)'}
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  اسحب ميزانية من (الأقل كفاءة):
+                  {isEn ? 'Pull budget from (Lower ROAS):' : 'اسحب ميزانية من (الأقل كفاءة):'}
                 </label>
                 <select
                   value={sourcePlatform}
@@ -546,7 +587,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 >
                   {sortedPlatformsByRoas.map((p) => (
                     <option key={p.platform} value={p.platform}>
-                      {PLATFORM_NAMES_AR[p.platform]} — عائد {p.roas}x
+                      {fullPlatformName[p.platform]} — ROAS {p.roas}x
                     </option>
                   ))}
                 </select>
@@ -554,7 +595,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                  وضخّها في (المنصة الرابحة):
+                  {isEn ? 'Reallocate into (Winner Channel):' : 'وضخّها في (المنصة الرابحة):'}
                 </label>
                 <select
                   value={targetPlatform}
@@ -563,18 +604,17 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 >
                   {sortedPlatformsByRoas.map((p) => (
                     <option key={p.platform} value={p.platform}>
-                      {PLATFORM_NAMES_AR[p.platform]} — عائد {p.roas}x
+                      {fullPlatformName[p.platform]} — ROAS {p.roas}x
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            {/* Budget Slider */}
             <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  المبلغ المنقول للتجربة:
+                  {isEn ? 'Simulated Budget Shift:' : 'المبلغ المنقول للتجربة:'}
                 </span>
                 <span className="text-base font-black text-indigo-700 dark:text-indigo-300 tabular-nums">
                   {shiftAmount.toLocaleString()} {currency}
@@ -591,7 +631,9 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
               />
               <div className="flex justify-between text-[10px] text-slate-500 tabular-nums">
                 <span>0 {currency}</span>
-                <span>الحد الأقصى المتاح: {maxShiftableBudget.toLocaleString()} {currency}</span>
+                <span>
+                  {isEn ? 'Max Available:' : 'الحد الأقصى المتاح:'} {maxShiftableBudget.toLocaleString()} {currency}
+                </span>
               </div>
             </div>
           </div>
@@ -600,13 +642,13 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
           <div className="lg:col-span-5 rounded-xl border border-emerald-300 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50/90 to-indigo-50/70 dark:from-emerald-950/30 dark:to-indigo-950/30 p-4 space-y-3">
             <div className="flex items-center gap-2 text-xs font-black text-emerald-800 dark:text-emerald-300">
               <Sparkles className="w-4 h-4" />
-              <span>النتيجة المتوقعة على نفس إجمالي الصرف</span>
+              <span>{isEn ? 'Projected Impact on Same Total Spend' : 'النتيجة المتوقعة على نفس إجمالي الصرف'}</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
               <div className="rounded-lg bg-white/80 dark:bg-slate-900/80 p-3 border border-emerald-200/70 dark:border-slate-800">
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
-                  زيادة المبيعات المتوقعة
+                  {isEn ? 'Projected Revenue Gain' : 'زيادة المبيعات المتوقعة'}
                 </span>
                 <span
                   className={`text-base font-black tabular-nums mt-0.5 block ${
@@ -622,26 +664,41 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
 
               <div className="rounded-lg bg-white/80 dark:bg-slate-900/80 p-3 border border-emerald-200/70 dark:border-slate-800">
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block">
-                  العائد العام الجديد (ROAS)
+                  {isEn ? 'New Blended ROAS' : 'العائد العام الجديد (ROAS)'}
                 </span>
                 <span className="text-base font-black text-indigo-700 dark:text-indigo-300 tabular-nums mt-0.5 block">
                   {simulationResult.projectedRoas}x{' '}
                   <span className="text-[11px] font-semibold text-slate-500">
-                    (بدلاً من {overallMetrics.roas}x)
+                    ({isEn ? 'vs' : 'بدلاً من'} {overallMetrics.roas}x)
                   </span>
                 </span>
               </div>
             </div>
 
             <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
-              نقل <strong>{shiftAmount.toLocaleString()} {currency}</strong> من{' '}
-              <strong>{SHORT_PLATFORM_LABEL[sourcePlatform]}</strong> ({simulationResult.srcRoas}x) إلى{' '}
-              <strong>{SHORT_PLATFORM_LABEL[targetPlatform]}</strong> (بمتوسط تحفظي{' '}
-              {simulationResult.conservativeTgtRoas}x) يرفع مبيعاتك الكلية إلى{' '}
-              <strong className="text-emerald-700 dark:text-emerald-400">
-                {simulationResult.projectedTotalRevenue.toLocaleString()} {currency}
-              </strong>{' '}
-              (~{simulationResult.extraOrdersEstimate} طلب إضافي) دون زيادة ريال واحد في ميزانيتك!
+              {isEn ? (
+                <>
+                  Shifting <strong>{shiftAmount.toLocaleString()} {currency}</strong> from{' '}
+                  <strong>{shortLabel[sourcePlatform]}</strong> ({simulationResult.srcRoas}x) to{' '}
+                  <strong>{shortLabel[targetPlatform]}</strong> (conservative{' '}
+                  {simulationResult.conservativeTgtRoas}x) lifts total sales to{' '}
+                  <strong className="text-emerald-700 dark:text-emerald-400">
+                    {simulationResult.projectedTotalRevenue.toLocaleString()} {currency}
+                  </strong>{' '}
+                  (~{simulationResult.extraOrdersEstimate} extra orders) with zero extra ad spend!
+                </>
+              ) : (
+                <>
+                  نقل <strong>{shiftAmount.toLocaleString()} {currency}</strong> من{' '}
+                  <strong>{shortLabel[sourcePlatform]}</strong> ({simulationResult.srcRoas}x) إلى{' '}
+                  <strong>{shortLabel[targetPlatform]}</strong> (بمتوسط تحفظي{' '}
+                  {simulationResult.conservativeTgtRoas}x) يرفع مبيعاتك الكلية إلى{' '}
+                  <strong className="text-emerald-700 dark:text-emerald-400">
+                    {simulationResult.projectedTotalRevenue.toLocaleString()} {currency}
+                  </strong>{' '}
+                  (~{simulationResult.extraOrdersEstimate} طلب إضافي) دون زيادة ريال واحد في ميزانيتك!
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -664,7 +721,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                       PLATFORM_BADGE_CLASSES[item.platform]
                     }`}
                   >
-                    {PLATFORM_NAMES_AR[item.platform]}
+                    {fullPlatformName[item.platform]}
                   </span>
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300 tabular-nums">
                     ROAS: {item.roas}x
@@ -682,11 +739,12 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 </span>
               </div>
 
-              {/* 4-Step Funnel Visual Metrics */}
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="rounded-lg bg-white dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
                   <Eye className="w-3.5 h-3.5 text-slate-400 mx-auto mb-1" />
-                  <span className="text-[10px] text-slate-500 block">الظهور</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    {isEn ? 'Impressions' : 'الظهور'}
+                  </span>
                   <span className="text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                     {item.totalImpressions.toLocaleString()}
                   </span>
@@ -694,7 +752,9 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
 
                 <div className="rounded-lg bg-white dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
                   <MousePointerClick className="w-3.5 h-3.5 text-indigo-500 mx-auto mb-1" />
-                  <span className="text-[10px] text-slate-500 block">النقرات ({item.ctr}%)</span>
+                  <span className="text-[10px] text-slate-500 block">
+                    {isEn ? 'Clicks' : 'النقرات'} ({item.ctr}%)
+                  </span>
                   <span className="text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                     {item.totalClicks.toLocaleString()}
                   </span>
@@ -703,7 +763,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 <div className="rounded-lg bg-white dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
                   <ShoppingCart className="w-3.5 h-3.5 text-purple-500 mx-auto mb-1" />
                   <span className="text-[10px] text-slate-500 block">
-                    السلة {item.clickToCartRate > 0 ? `(${item.clickToCartRate}%)` : ''}
+                    {isEn ? 'Cart' : 'السلة'} {item.clickToCartRate > 0 ? `(${item.clickToCartRate}%)` : ''}
                   </span>
                   <span className="text-xs font-bold text-slate-900 dark:text-slate-100 tabular-nums">
                     {item.totalAddToCart.toLocaleString()}
@@ -713,7 +773,7 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 <div className="rounded-lg bg-white dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
                   <CreditCard className="w-3.5 h-3.5 text-emerald-500 mx-auto mb-1" />
                   <span className="text-[10px] text-slate-500 block">
-                    الشراء {item.cartToPurchaseRate > 0 ? `(${item.cartToPurchaseRate}%)` : ''}
+                    {isEn ? 'Orders' : 'الشراء'} {item.cartToPurchaseRate > 0 ? `(${item.cartToPurchaseRate}%)` : ''}
                   </span>
                   <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 tabular-nums">
                     {item.totalPurchases.toLocaleString()}
@@ -721,7 +781,6 @@ export const DecisionActionCenter: React.FC<DecisionActionCenterProps> = ({
                 </div>
               </div>
 
-              {/* Actionable Diagnosis */}
               <div className="rounded-lg bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 p-2.5 flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300">
                 <TrendingUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                 <p className="leading-relaxed">{item.diagnosisAdvice}</p>
